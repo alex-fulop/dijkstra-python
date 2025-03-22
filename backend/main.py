@@ -82,9 +82,16 @@ async def find_path(request: PathRequest):
 @app.post("/import/json/")
 async def import_json(data: Dict):
     try:
+        # Update global nodes dictionary
+        global nodes
         nodes = data.get("nodes", {})
         edges = data.get("edges", [])
-        # Process the data...
+        
+        # Reset and rebuild graph
+        dijkstra.graph = {}
+        for source, target, weight in edges:
+            dijkstra.add_edge(source, target, weight)
+        
         return {"message": "Data imported successfully"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

@@ -11,9 +11,35 @@ function App() {
   const [selectedPath, setSelectedPath] = useState(null);
 
   return (
-    <Container maxWidth="lg">
-      <Box sx={{ display: 'flex', gap: 2, p: 2 }}>
-        <Box sx={{ flex: 1 }}>
+    <Box sx={{ 
+      height: '100vh', 
+      display: 'flex', 
+      overflow: 'hidden' 
+    }}>
+      {/* Left Panel - Scrollable Forms */}
+      <Box sx={{ 
+        width: '400px',
+        height: '100%',
+        overflowY: 'auto',
+        p: 2,
+        borderRight: 1,
+        borderColor: 'divider',
+        '&::-webkit-scrollbar': {
+          width: '8px',
+        },
+        '&::-webkit-scrollbar-track': {
+          background: '#f1f1f1',
+        },
+        '&::-webkit-scrollbar-thumb': {
+          background: '#888',
+          borderRadius: '4px',
+        },
+        '&::-webkit-scrollbar-thumb:hover': {
+          background: '#555',
+        },
+      }}>
+        {/* Wrapper for forms with padding */}
+        <Box sx={{ pt: 4, pb: 8 }}> {/* Add padding top and extra padding bottom */}
           <Paper sx={{ p: 2, mb: 2 }}>
             <NodeForm onNodeAdd={(node) => {
               setNodes({ ...nodes, [node.name]: [node.latitude, node.longitude] });
@@ -36,13 +62,16 @@ function App() {
             />
           </Paper>
         </Box>
-        <Box sx={{ flex: 2 }}>
-          <Paper sx={{ height: '70vh' }}>
-            <Map nodes={nodes} selectedPath={selectedPath} />
-          </Paper>
-        </Box>
       </Box>
-    </Container>
+
+      {/* Right Panel - Full Height Map */}
+      <Box sx={{ 
+        flex: 1,
+        height: '100%',
+      }}>
+        <Map nodes={nodes} selectedPath={selectedPath} />
+      </Box>
+    </Box>
   );
 }
 
