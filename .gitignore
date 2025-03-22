@@ -1,20 +1,42 @@
-# Python cache files
+# Backend
 __pycache__/
 *.py[cod]
 *$py.class
-
-# Distribution / packaging
 dist/
 build/
 *.egg-info/
+*.log
+*.db
+*.sqlite3
+map.html
+temp_map.html
 
-# Virtual environment
+# Frontend
+node_modules/
+dist/
+build/
+.env
+.env.local
+.env.development
+.env.production
+*.log
+coverage/
+.next/
+
+# Virtual Environment
+venv/
 .venv/
 env/
 .env/
 
-# IDE specific files
+backend/.venv/
+
+# IDE
 .idea/
 .vscode/
 *.swp
 .DS_Store
+
+# Dependencies
+yarn.lock
+package-lock.json 
