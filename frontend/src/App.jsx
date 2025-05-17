@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Box, Paper, IconButton, Drawer, Tabs, Tab } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
@@ -8,6 +8,7 @@ import EdgeForm from './components/EdgeForm';
 import PathFinder from './components/PathFinder';
 import NLPPathFinder from './components/NLPPathFinder';
 import DataManager from './components/DataManager';
+import axios from 'axios';
 
 function App() {
   const [nodes, setNodes] = useState({});
@@ -15,6 +16,31 @@ function App() {
   const [nlpInfo, setNlpInfo] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [tab, setTab] = useState(0);
+
+  // Fetch nodes when the app starts
+  useEffect(() => {
+    const fetchNodes = async () => {
+      try {
+        const response = await axios.get('http://localhost:8000/nodes/');
+        setNodes(response.data);
+      } catch (error) {
+        console.error('Error fetching nodes:', error);
+      }
+    };
+    fetchNodes();
+  }, []);
+
+  const handleNodeDelete = (nodeName) => {
+    setNodes(prevNodes => {
+      const newNodes = { ...prevNodes };
+      delete newNodes[nodeName];
+      return newNodes;
+    });
+    // Clear selected path if it contains the deleted node
+    if (selectedPath) {
+      setSelectedPath(null);
+    }
+  };
 
   //TODO: ADD MORE NODES FOR THE ROUTE (5 de ex)
   return (
@@ -145,7 +171,11 @@ function App() {
           bgcolor: '#eaeaea',
         }}
       >
-        <Map nodes={nodes} selectedPath={selectedPath} />
+        <Map 
+          nodes={nodes} 
+          selectedPath={selectedPath} 
+          onNodeDelete={handleNodeDelete}
+        />
       </Box>
     </Box>
   );
