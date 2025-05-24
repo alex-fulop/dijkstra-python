@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { TextField, Button, Box, MenuItem, Typography } from '@mui/material';
 import axios from 'axios';
+import { useTranslation } from 'react-i18next';
 
 function PathFinder({ nodes, onPathFound }) {
+  const { t } = useTranslation();
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [result, setResult] = useState(null);
@@ -44,7 +46,7 @@ function PathFinder({ nodes, onPathFound }) {
       <Box component="form" onSubmit={handleSubmit}>
         <TextField
           select
-          label="Start Node"
+          label={t('pathFinder.start')}
           value={start}
           onChange={(e) => setStart(e.target.value)}
           margin="normal"
@@ -58,7 +60,7 @@ function PathFinder({ nodes, onPathFound }) {
         </TextField>
         <TextField
           select
-          label="End Node"
+          label={t('pathFinder.end')}
           value={end}
           onChange={(e) => setEnd(e.target.value)}
           margin="normal"
@@ -76,18 +78,18 @@ function PathFinder({ nodes, onPathFound }) {
           fullWidth
           disabled={!start || !end}
         >
-          Find Path
+          {t('pathFinder.find')}
         </Button>
       </Box>
       
       {result && (
         <Box sx={{ mt: 2, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
-          <Typography variant="h6">Found Path:</Typography>
+          <Typography variant="h6">{t('routeInfo.title')}:</Typography>
           <Typography>
             {result.path.join(' → ')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Total distance: {result.distance.toFixed(2)} km
+            {t('routeInfo.distance')}: {result.distance.toFixed(2)} km
           </Typography>
         </Box>
       )}

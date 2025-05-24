@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Paper, IconButton, Drawer, Tabs, Tab } from '@mui/material';
+import { Box, Paper, IconButton, Drawer, Tabs, Tab, Button, ButtonGroup } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import Map from './components/Map';
@@ -8,8 +8,11 @@ import PathFinder from './components/PathFinder';
 import NLPPathFinder from './components/NLPPathFinder';
 import DataManager from './components/DataManager';
 import axios from 'axios';
+import { useTranslation } from 'react-i18next';
+import './i18n';
 
 function App() {
+  const { t, i18n } = useTranslation();
   const [nodes, setNodes] = useState({});
   const [selectedPath, setSelectedPath] = useState(null);
   const [nlpInfo, setNlpInfo] = useState(null);
@@ -54,6 +57,31 @@ function App() {
   //TODO: ADD MORE NODES FOR THE ROUTE (5 de ex)
   return (
     <Box sx={{ height: '100vh', display: 'flex', overflow: 'hidden' }}>
+      {/* Language Switcher */}
+      <ButtonGroup
+        sx={{
+          position: 'absolute',
+          top: 80,
+          right: 16,
+          zIndex: 1300,
+          bgcolor: 'background.paper',
+          boxShadow: 1,
+        }}
+      >
+        <Button
+          onClick={() => i18n.changeLanguage('en')}
+          variant={i18n.language === 'en' ? 'contained' : 'outlined'}
+        >
+          EN
+        </Button>
+        <Button
+          onClick={() => i18n.changeLanguage('ro')}
+          variant={i18n.language === 'ro' ? 'contained' : 'outlined'}
+        >
+          RO
+        </Button>
+      </ButtonGroup>
+
       {/* Sidebar Drawer */}
       {sidebarOpen && (
         <Drawer
@@ -80,8 +108,8 @@ function App() {
           <Box sx={{ px: 2 }}>
             {/* Tabs */}
             <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="fullWidth" sx={{ mb: 2 }}>
-              <Tab label="Shortest Route" />
-              <Tab label="Personalized (NLP)" />
+              <Tab label={t('tabs.shortestRoute')} />
+              <Tab label={t('tabs.personalizedNLP')} />
             </Tabs>
             {/* Tab Panels */}
             {tab === 0 && (
@@ -127,13 +155,13 @@ function App() {
                 {/* NLP response info box */}
                 {nlpInfo && (
                   <Paper sx={{ p: 2, mt: 2, bgcolor: '#f5f5f5' }}>
-                    <strong>Route Info:</strong>
+                    <strong>{t('routeInfo.title')}:</strong>
                     <div>
                       {nlpInfo.text && <div style={{ marginBottom: 8 }}>{nlpInfo.text}</div>}
-                      {nlpInfo.distance && <div>Distance: {nlpInfo.distance} km</div>}
+                      {nlpInfo.distance && <div>{t('routeInfo.distance')}: {nlpInfo.distance} km</div>}
                       {nlpInfo.recommendations && (
                         <div style={{ marginTop: 8 }}>
-                          <strong>Recommendations:</strong>
+                          <strong>{t('routeInfo.recommendations')}:</strong>
                           <ul>
                             {nlpInfo.recommendations.map((rec, i) => (
                               <li key={i}>{rec}</li>

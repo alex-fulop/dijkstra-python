@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { TextField, Button, Box } from '@mui/material';
 import axios from 'axios';
+import { useTranslation } from 'react-i18next';
 
 function NodeForm({ onNodeAdd }) {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [lat, setLat] = useState('');
   const [lng, setLng] = useState('');
@@ -27,14 +29,14 @@ function NodeForm({ onNodeAdd }) {
   return (
     <Box component="form" onSubmit={handleSubmit}>
       <TextField
-        label="Node Name"
+        label={t('nodeForm.name')}
         value={name}
         onChange={(e) => setName(e.target.value)}
         margin="normal"
         fullWidth
       />
       <TextField
-        label="Latitude"
+        label={t('nodeForm.latitude')}
         type="number"
         value={lat}
         onChange={(e) => setLat(e.target.value)}
@@ -42,7 +44,7 @@ function NodeForm({ onNodeAdd }) {
         fullWidth
       />
       <TextField
-        label="Longitude"
+        label={t('nodeForm.longitude')}
         type="number"
         value={lng}
         onChange={(e) => setLng(e.target.value)}
@@ -50,7 +52,7 @@ function NodeForm({ onNodeAdd }) {
         fullWidth
       />
       <Button type="submit" variant="contained" fullWidth>
-        Add Node
+        {t('nodeForm.add')}
       </Button>
     </Box>
   );

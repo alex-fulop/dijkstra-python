@@ -1,0 +1,31 @@
+{
+  "tabs": {
+    "shortestRoute": "Rută Cea Mai Scurtă",
+    "personalizedNLP": "Personalizată (NLP)"
+  },
+  "nodeForm": {
+    "title": "Adaugă Nod Nou",
+    "name": "Nume Nod",
+    "latitude": "Latitudine",
+    "longitude": "Longitudine",
+    "add": "Adaugă Nod"
+  },
+  "pathFinder": {
+    "start": "Nod de Pornire",
+    "end": "Nod de Destinație",
+    "find": "Găsește Ruta"
+  },
+  "dataManager": {
+    "import": "Importă Date",
+    "export": "Exportă Date"
+  },
+  "routeInfo": {
+    "title": "Informații Rută",
+    "distance": "Distanță",
+    "recommendations": "Recomandări"
+  },
+  "map": {
+    "deleteNode": "Șterge Nod",
+    "addNode": "Adaugă Nod"
+  }
+} 

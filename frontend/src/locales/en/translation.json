@@ -1,0 +1,31 @@
+{
+  "tabs": {
+    "shortestRoute": "Shortest Route",
+    "personalizedNLP": "Personalized (NLP)"
+  },
+  "nodeForm": {
+    "title": "Add New Node",
+    "name": "Node Name",
+    "latitude": "Latitude",
+    "longitude": "Longitude",
+    "add": "Add Node"
+  },
+  "pathFinder": {
+    "start": "Start Node",
+    "end": "End Node",
+    "find": "Find Path"
+  },
+  "dataManager": {
+    "import": "Import Data",
+    "export": "Export Data"
+  },
+  "routeInfo": {
+    "title": "Route Info",
+    "distance": "Distance",
+    "recommendations": "Recommendations"
+  },
+  "map": {
+    "deleteNode": "Delete Node",
+    "addNode": "Add Node"
+  }
+} 

@@ -1,8 +1,10 @@
 import { useRef } from 'react';
 import { Button, Box } from '@mui/material';
 import axios from 'axios';
+import { useTranslation } from 'react-i18next';
 
 function DataManager({ onDataImported }) {
+  const { t } = useTranslation();
   const fileInputRef = useRef();
 
   const handleImport = async (e) => {
@@ -55,14 +57,14 @@ function DataManager({ onDataImported }) {
         fullWidth
         onClick={() => fileInputRef.current.click()}
       >
-        Import JSON
+        {t('dataManager.import')}
       </Button>
       <Button 
         variant="outlined" 
         fullWidth
         onClick={handleExport}
       >
-        Export JSON
+        {t('dataManager.export')}
       </Button>
     </Box>
   );
