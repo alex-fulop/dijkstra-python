@@ -124,27 +124,23 @@ async def import_json(data: Dict, db: Session = Depends(get_db)):
 
         print(f"Processing {len(nodes_data)} nodes and {len(edges_data)} edges")
 
-        # Clear existing data
-        print("Clearing existing data...")
-        db.query(Edge).delete()
-        db.query(Node).delete()
-        db.commit()
-        print("Existing data cleared")
-
-        # Add nodes
+        # Add new nodes
         print("Adding nodes...")
         for name, coords in nodes_data.items():
             try:
-                db_node = Node(name=name, latitude=coords[0], longitude=coords[1])
-                db.add(db_node)
-                print(f"Added node: {name} with coordinates {coords}")
+                # Check if node already exists
+                existing_node = db.query(Node).filter(Node.name == name).first()
+                if not existing_node:
+                    db_node = Node(name=name, latitude=coords[0], longitude=coords[1])
+                    db.add(db_node)
+                    print(f"Added node: {name} with coordinates {coords}")
             except Exception as node_error:
                 print(f"Error adding node {name}: {str(node_error)}")
                 raise
         db.commit()
         print("Nodes added successfully")
 
-        # Add edges
+        # Add new edges
         print("Adding edges...")
         for source, target, weight in edges_data:
             try:
@@ -156,11 +152,24 @@ async def import_json(data: Dict, db: Session = Depends(get_db)):
                 if not target_node:
                     raise ValueError(f"Target node '{target}' not found")
 
-                db_edge = Edge(
-                    source_id=source_node.id, target_id=target_node.id, weight=weight
+                # Check if edge already exists
+                existing_edge = (
+                    db.query(Edge)
+                    .filter(
+                        Edge.source_id == source_node.id,
+                        Edge.target_id == target_node.id,
+                    )
+                    .first()
                 )
-                db.add(db_edge)
-                print(f"Added edge: {source} -> {target} with weight {weight}")
+
+                if not existing_edge:
+                    db_edge = Edge(
+                        source_id=source_node.id,
+                        target_id=target_node.id,
+                        weight=weight,
+                    )
+                    db.add(db_edge)
+                    print(f"Added edge: {source} -> {target} with weight {weight}")
             except Exception as edge_error:
                 print(f"Error adding edge {source} -> {target}: {str(edge_error)}")
                 raise
@@ -209,11 +218,43 @@ async def export_data(db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.get("/romania-dataset/")
-async def get_romania_dataset():
+@app.post("/path/")
+async def find_path(path_request: dict = Body(...), db: Session = Depends(get_db)):
     try:
-        with open("romanian_dataset.json", "r") as f:
-            return json.load(f)
+        start = path_request.get("start")
+        end = path_request.get("end")
+
+        if not start or not end:
+            raise HTTPException(
+                status_code=400, detail="Start and end nodes are required"
+            )
+
+        # Get all nodes from database
+        db_nodes = db.query(Node).all()
+        db_edges = db.query(Edge).all()
+
+        # Clear existing graph and rebuild it
+        dijkstra.graph = {}
+
+        # Add all nodes to the graph
+        for node in db_nodes:
+            dijkstra.graph[node.name] = []
+
+        # Add only the actual edges from the database
+        for edge in db_edges:
+            source = db.query(Node).filter(Node.id == edge.source_id).first()
+            target = db.query(Node).filter(Node.id == edge.target_id).first()
+            dijkstra.add_edge(source.name, target.name, edge.weight)
+
+        # Find shortest path
+        path, distance = dijkstra.find_shortest_path(start, end)
+
+        if not path:
+            raise HTTPException(
+                status_code=404, detail="No path found between the specified nodes"
+            )
+
+        return {"path": path, "distance": distance}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -359,4 +400,20 @@ async def delete_node(node_name: str, db: Session = Depends(get_db)):
         return {"message": f"Node {node_name} deleted successfully"}
     except Exception as e:
         db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/edges/")
+async def get_edges(db: Session = Depends(get_db)):
+    try:
+        edges = []
+        db_edges = db.query(Edge).all()
+        for edge in db_edges:
+            source = db.query(Node).filter(Node.id == edge.source_id).first()
+            target = db.query(Node).filter(Node.id == edge.target_id).first()
+            edges.append(
+                {"source": source.name, "target": target.name, "weight": edge.weight}
+            )
+        return edges
+    except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

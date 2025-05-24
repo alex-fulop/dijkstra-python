@@ -41,15 +41,6 @@ function DataManager({ onDataImported }) {
     }
   };
 
-  const handleLoadRomania = async () => {
-    try {
-      const response = await axios.get('http://localhost:8000/romania-dataset/');
-      onDataImported(response.data);
-    } catch (error) {
-      console.error('Error loading Romania dataset:', error);
-    }
-  };
-
   return (
     <Box sx={{ display: 'flex', gap: 2, flexDirection: 'column' }}>
       <input
@@ -72,13 +63,6 @@ function DataManager({ onDataImported }) {
         onClick={handleExport}
       >
         Export JSON
-      </Button>
-      <Button 
-        variant="contained" 
-        fullWidth
-        onClick={handleLoadRomania}
-      >
-        Load Romania Dataset
       </Button>
     </Box>
   );

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { TextField, Button, Box, MenuItem, Typography } from '@mui/material';
 import axios from 'axios';
 
@@ -6,6 +6,20 @@ function PathFinder({ nodes, onPathFound }) {
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [result, setResult] = useState(null);
+
+  // Reset selections if nodes are deleted
+  useEffect(() => {
+    if (!nodes.includes(start)) {
+      setStart('');
+      setResult(null);
+      onPathFound(null);  // Clear the path on the map
+    }
+    if (!nodes.includes(end)) {
+      setEnd('');
+      setResult(null);
+      onPathFound(null);  // Clear the path on the map
+    }
+  }, [nodes, start, end, onPathFound]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -21,6 +35,7 @@ function PathFinder({ nodes, onPathFound }) {
     } catch (error) {
       console.error('Error finding path:', error);
       setResult(null);
+      onPathFound(null);
     }
   };
 

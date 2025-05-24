@@ -4,7 +4,6 @@ import MenuIcon from '@mui/icons-material/Menu';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import Map from './components/Map';
 import NodeForm from './components/NodeForm';
-import EdgeForm from './components/EdgeForm';
 import PathFinder from './components/PathFinder';
 import NLPPathFinder from './components/NLPPathFinder';
 import DataManager from './components/DataManager';
@@ -36,9 +35,19 @@ function App() {
       delete newNodes[nodeName];
       return newNodes;
     });
+
     // Clear selected path if it contains the deleted node
-    if (selectedPath) {
+    if (selectedPath && selectedPath.includes(nodeName)) {
       setSelectedPath(null);
+    }
+  };
+
+  const handleNodeAdd = async () => {
+    try {
+      const response = await axios.get('http://localhost:8000/nodes/');
+      setNodes(response.data);
+    } catch (error) {
+      console.error('Error fetching nodes:', error);
     }
   };
 
@@ -81,9 +90,6 @@ function App() {
                   <NodeForm onNodeAdd={(node) => {
                     setNodes({ ...nodes, [node.name]: [node.latitude, node.longitude] });
                   }} />
-                </Paper>
-                <Paper sx={{ p: 2, mb: 2 }}>
-                  <EdgeForm nodes={Object.keys(nodes)} />
                 </Paper>
                 <Paper sx={{ p: 2, mb: 2 }}>
                   <PathFinder 
@@ -175,6 +181,7 @@ function App() {
           nodes={nodes} 
           selectedPath={selectedPath} 
           onNodeDelete={handleNodeDelete}
+          onNodeAdd={handleNodeAdd}
         />
       </Box>
     </Box>
