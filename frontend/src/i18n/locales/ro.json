@@ -36,6 +36,7 @@
     "deleteNode": "Șterge Nod",
     "addNode": "Adaugă Nod",
     "edgeCreation": "Shift+Click pe alt nod pentru a crea o muchie de la {node}",
-    "selectedEdge": "Muchie selectată: {source} → {target}"
+    "selectedEdge": "Muchie selectată: {source} → {target}",
+    "calculatingRoute": "Se calculează ruta..."
   }
 } 

@@ -1,5 +1,5 @@
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents } from 'react-leaflet';
-import { IconButton, Box, Typography, TextField, Button, Switch, FormControlLabel, Tooltip } from '@mui/material';
+import { IconButton, Box, Typography, TextField, Button, Switch, FormControlLabel, Tooltip, CircularProgress } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CloseIcon from '@mui/icons-material/Close';
 import axios from 'axios';
@@ -16,7 +16,7 @@ function MapClickHandler({ onMapClick }) {
   return null;
 }
 
-function Map({ nodes, selectedPath, onNodeDelete, onNodeAdd }) {
+function Map({ nodes, selectedPath, onNodeDelete, onNodeAdd, isLoading }) {
   const { t } = useTranslation();
   const center = [45.9432, 24.9668]; // Center of Romania
   const [clickedPosition, setClickedPosition] = useState(null);
@@ -111,9 +111,9 @@ function Map({ nodes, selectedPath, onNodeDelete, onNodeAdd }) {
   };
 
   const getEdgeColor = (source, target) => {
-    if (selectedPath && selectedPath.includes(source) && selectedPath.includes(target)) {
-      const sourceIndex = selectedPath.indexOf(source);
-      const targetIndex = selectedPath.indexOf(target);
+    if (selectedPath && selectedPath.path && selectedPath.path.includes(source) && selectedPath.path.includes(target)) {
+      const sourceIndex = selectedPath.path.indexOf(source);
+      const targetIndex = selectedPath.path.indexOf(target);
       if (Math.abs(sourceIndex - targetIndex) === 1) {
         return '#ff0000'; // Red for selected path
       }
@@ -131,6 +131,42 @@ function Map({ nodes, selectedPath, onNodeDelete, onNodeAdd }) {
 
   return (
     <Box sx={{ position: 'relative', height: '100%', width: '100%' }}>
+      {/* Loading Overlay */}
+      {isLoading && (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(255, 255, 255, 0.7)',
+            zIndex: 2000,
+          }}
+        >
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 2,
+              p: 3,
+              bgcolor: 'background.paper',
+              borderRadius: 2,
+              boxShadow: 3,
+            }}
+          >
+            <CircularProgress size={40} />
+            <Typography variant="body1">
+              {t('map.calculatingRoute')}
+            </Typography>
+          </Box>
+        </Box>
+      )}
+
       <Box sx={{ position: 'absolute', top: 16, right: 16, zIndex: 1000, bgcolor: 'white', p: 1, borderRadius: 1 }}>
         <FormControlLabel
           control={
@@ -201,12 +237,9 @@ function Map({ nodes, selectedPath, onNodeDelete, onNodeAdd }) {
         })}
 
         {/* Draw selected path */}
-        {selectedPath && selectedPath.length > 1 && (
+        {selectedPath && selectedPath.coordinates && selectedPath.coordinates.length > 1 && (
           <Polyline
-            positions={selectedPath.map(nodeName => {
-              const node = nodes[nodeName];
-              return [node[0], node[1]];
-            })}
+            positions={selectedPath.coordinates}
             color="#ff0000"
             weight={3}
           />

@@ -36,6 +36,7 @@
     "deleteNode": "Delete Node",
     "addNode": "Add Node",
     "edgeCreation": "Shift+Click another node to create an edge from {node}",
-    "selectedEdge": "Selected edge: {source} → {target}"
+    "selectedEdge": "Selected edge: {source} → {target}",
+    "calculatingRoute": "Calculating route..."
   }
 } 

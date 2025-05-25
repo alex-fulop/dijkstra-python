@@ -4,6 +4,8 @@ from pydantic import BaseModel
 from typing import Dict, Optional, List
 from dijkstra import DijkstraAlgorithm
 from ai_pathfinder import AIPathfinder
+from osrm_service import OSRMService
+from routing_service import RoutingService
 import openai
 import os
 from dotenv import load_dotenv
@@ -31,12 +33,46 @@ app.add_middleware(
 # Initialize our components
 dijkstra = DijkstraAlgorithm()
 ai_pathfinder = AIPathfinder()
+osrm = OSRMService()
+routing_service = RoutingService()
 
 # Set your OpenAI API key
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # Load your API key from environment variable
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+
+
+def initialize_routing_service(db: Session):
+    """Initialize the routing service with all existing nodes and edges from the database"""
+    try:
+        # Get all nodes
+        nodes = db.query(Node).all()
+        for node in nodes:
+            routing_service.add_node(node.name, node.latitude, node.longitude)
+            print(f"Added node to routing service: {node.name}")
+
+        # Get all edges
+        edges = db.query(Edge).all()
+        for edge in edges:
+            source = db.query(Node).filter(Node.id == edge.source_id).first()
+            target = db.query(Node).filter(Node.id == edge.target_id).first()
+            if source and target:
+                routing_service.add_edge(source.name, target.name)
+                print(f"Added edge to routing service: {source.name} -> {target.name}")
+
+    except Exception as e:
+        print(f"Error initializing routing service: {str(e)}")
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize services when the application starts"""
+    db = next(get_db())
+    try:
+        initialize_routing_service(db)
+    finally:
+        db.close()
 
 
 # Data models
@@ -50,6 +86,13 @@ class EdgeCreate(BaseModel):
     source: str
     target: str
     weight: Optional[float] = None
+
+
+class PathRequest(BaseModel):
+    start: str
+    end: str
+    waypoints: Optional[List[str]] = None
+    avoid: Optional[List[str]] = None
 
 
 @app.post("/nodes/")
@@ -68,6 +111,9 @@ async def add_node(node: NodeCreate, db: Session = Depends(get_db)):
 
         # Update in-memory graph
         dijkstra.graph[node.name] = []
+
+        # Add node to routing service
+        routing_service.add_node(node.name, node.latitude, node.longitude)
 
         # Find nearby nodes and create edges
         MAX_DISTANCE = (
@@ -102,6 +148,9 @@ async def add_node(node: NodeCreate, db: Session = Depends(get_db)):
             # Update in-memory graph
             dijkstra.add_edge(node.name, nearby_node.name, distance)
 
+            # Add edge to routing service
+            routing_service.add_edge(node.name, nearby_node.name)
+
         db.commit()
 
         return {
@@ -112,6 +161,7 @@ async def add_node(node: NodeCreate, db: Session = Depends(get_db)):
         }
     except Exception as e:
         db.rollback()
+        print(f"Error adding node: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -145,6 +195,8 @@ async def add_edge(edge: EdgeCreate, db: Session = Depends(get_db)):
 
         # Update in-memory graph
         dijkstra.add_edge(edge.source, edge.target, edge.weight)
+
+        routing_service.add_edge(edge.source, edge.target)
 
         return {
             "message": f"Added edge from {edge.source} to {edge.target}",
@@ -259,62 +311,25 @@ async def export_data(db: Session = Depends(get_db)):
 
 
 @app.post("/path/")
-async def find_path(path_request: dict = Body(...), db: Session = Depends(get_db)):
+async def find_path(request: PathRequest):
     try:
-        start = path_request.get("start")
-        end = path_request.get("end")
-        avoid = path_request.get("avoid", [])
+        print(f"Finding path from {request.start} to {request.end}")
+        print(f"Waypoints: {request.waypoints}")
+        print(f"Avoid: {request.avoid}")
 
-        print(f"Path request - start: {start}, end: {end}, avoid: {avoid}")
-
-        if not start or not end:
-            raise HTTPException(
-                status_code=400, detail="Start and end nodes are required"
-            )
-
-        # Get all nodes from database
-        db_nodes = db.query(Node).all()
-        db_edges = db.query(Edge).all()
-
-        print(f"Found {len(db_nodes)} nodes and {len(db_edges)} edges in database")
-
-        # Clear existing graph and rebuild it
-        dijkstra.graph = {}
-
-        # Add all nodes to the graph
-        for node in db_nodes:
-            dijkstra.graph[node.name] = []
-
-        # Add only the actual edges from the database
-        for edge in db_edges:
-            source = db.query(Node).filter(Node.id == edge.source_id).first()
-            target = db.query(Node).filter(Node.id == edge.target_id).first()
-            dijkstra.add_edge(source.name, target.name, edge.weight)
-
-        print(f"Graph built with {len(dijkstra.graph)} nodes")
-
-        # Find shortest path
-        path, distance = dijkstra.find_shortest_path(start, end, avoid=avoid)
-
-        print(f"Path calculation result - path: {path}, distance: {distance}")
-
-        if not path or distance == float("inf"):
-            avoid_str = f" while avoiding {', '.join(avoid)}" if avoid else ""
-            raise HTTPException(
-                status_code=404,
-                detail=f"No valid path found from {start} to {end}{avoid_str}",
-            )
-
-        return {"path": path, "distance": distance}
+        route = routing_service.find_route(
+            request.start, request.end, request.waypoints, request.avoid
+        )
+        return route
+    except ValueError as e:
+        print(f"ValueError in find_path: {str(e)}")
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        print(f"Error in find_path: {str(e)}")
-        print(f"Error type: {type(e)}")
+        print(f"Unexpected error in find_path: {str(e)}")
         import traceback
 
         print(f"Traceback: {traceback.format_exc()}")
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/nlp-path/")
@@ -454,6 +469,8 @@ async def delete_node(node_name: str, db: Session = Depends(get_db)):
                     for target, weight in node_edges
                     if target != node_name
                 ]
+
+        routing_service.remove_node(node_name)
 
         return {"message": f"Node {node_name} deleted successfully"}
     except Exception as e:

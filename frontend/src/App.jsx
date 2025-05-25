@@ -19,6 +19,7 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [tab, setTab] = useState(0);
   const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Fetch nodes when the app starts
   useEffect(() => {
@@ -126,6 +127,7 @@ function App() {
                     nodes={Object.keys(nodes)} 
                     onPathFound={setSelectedPath}
                     onError={setError}
+                    onLoadingChange={setIsLoading}
                   />
                 </Paper>
                 <Paper sx={{ p: 2 }}>
@@ -146,6 +148,7 @@ function App() {
                       setSelectedPath(path);
                       setNlpInfo(info);
                     }}
+                    onLoadingChange={setIsLoading}
                   />
                 </Paper>
                 <Paper sx={{ p: 2 }}>
@@ -214,6 +217,7 @@ function App() {
           selectedPath={selectedPath} 
           onNodeDelete={handleNodeDelete}
           onNodeAdd={handleNodeAdd}
+          isLoading={isLoading}
         />
         
         {/* Error Snackbar */}
