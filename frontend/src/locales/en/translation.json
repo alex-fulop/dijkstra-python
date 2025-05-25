@@ -19,8 +19,11 @@
     "noPathFoundTip": "No valid path found from {start} to {end}{avoidText}"
   },
   "nlpPathFinder": {
-    "description": "Describe your route (e.g. 'I want to go from Oradea to Constanta with a scenic stop')",
-    "getRoute": "Get Personalized Route"
+    "getStarted": "Get started with travel recommendations",
+    "getRecommendations": "Get Travel Recommendations",
+    "askQuestion": "Ask about your route...",
+    "welcomeMessage": "I've found a route for you: {route}\nTotal distance: {distance} km\n\nHere are some recommendations for your journey:",
+    "locationInfo": "📍 {location}\n\n🏛️ Top Attractions:\n• {attractions}\n\n🍽️ Recommended Restaurants:\n• {restaurants}\n\n🎉 Events & Festivals:\n{events}\n\n⏰ Best Time to Visit:\n{bestTime}"
   },
   "dataManager": {
     "import": "Import Data",
@@ -29,7 +32,12 @@
   "routeInfo": {
     "title": "Route Info",
     "distance": "Distance",
-    "recommendations": "Recommendations"
+    "recommendations": "Recommendations",
+    "touristGuide": "Tourist Guide",
+    "attractions": "Top Attractions",
+    "restaurants": "Recommended Restaurants",
+    "events": "Events & Festivals",
+    "bestTime": "Best Time to Visit"
   },
   "map": {
     "deleteNode": "Delete Node",

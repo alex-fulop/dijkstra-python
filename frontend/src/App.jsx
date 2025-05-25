@@ -42,8 +42,9 @@ function App() {
     });
 
     // Clear selected path if it contains the deleted node
-    if (selectedPath && selectedPath.includes(nodeName)) {
+    if (selectedPath && selectedPath.path && selectedPath.path.includes(nodeName)) {
       setSelectedPath(null);
+      setNlpInfo(null);
     }
   };
 
@@ -54,6 +55,26 @@ function App() {
       setNodes(response.data);
     } catch (error) {
       console.error('Error fetching nodes:', error);
+    }
+  };
+
+  const handlePathFound = (path, info) => {
+    if (!path) {
+      setSelectedPath(null);
+      setNlpInfo(null);
+      return;
+    }
+
+    // Ensure path data has consistent structure
+    const pathData = {
+      path: Array.isArray(path) ? path : path.path,
+      coordinates: path.coordinates || [],
+      distance: path.distance || info?.distance,
+      tourist_info: path.tourist_info || {}
+    };
+    setSelectedPath(pathData);
+    if (info) {
+      setNlpInfo(info);
     }
   };
 
@@ -110,76 +131,78 @@ function App() {
           </Box>
           <Box sx={{ px: 2 }}>
             {/* Tabs */}
-            <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="fullWidth" sx={{ mb: 2 }}>
+            <Tabs 
+              value={tab} 
+              onChange={(_, v) => setTab(v)} 
+              variant="fullWidth" 
+              sx={{ 
+                position: 'sticky',
+                top: 0,
+                bgcolor: 'background.paper',
+                zIndex: 2,
+                borderBottom: 1,
+                borderColor: 'divider'
+              }}
+            >
               <Tab label={t('tabs.shortestRoute')} />
               <Tab label={t('tabs.personalizedNLP')} />
             </Tabs>
             {/* Tab Panels */}
-            {tab === 0 && (
-              <>
-                <Paper sx={{ p: 2, mb: 2 }}>
-                  <NodeForm onNodeAdd={(node) => {
-                    setNodes({ ...nodes, [node.name]: [node.latitude, node.longitude] });
-                  }} />
-                </Paper>
-                <Paper sx={{ p: 2, mb: 2 }}>
-                  <PathFinder 
-                    nodes={Object.keys(nodes)} 
-                    onPathFound={setSelectedPath}
-                    onError={setError}
-                    onLoadingChange={setIsLoading}
-                  />
-                </Paper>
-                <Paper sx={{ p: 2 }}>
-                  <DataManager 
-                    onDataImported={(data) => {
-                      setNodes(data.nodes);
-                    }} 
-                  />
-                </Paper>
-              </>
-            )}
-            {tab === 1 && (
-              <>
-                <Paper sx={{ p: 2, mb: 2 }}>
-                  <NLPPathFinder 
-                    nodes={nodes}
-                    onPathFound={(path, info) => {
-                      setSelectedPath(path);
-                      setNlpInfo(info);
-                    }}
-                    onLoadingChange={setIsLoading}
-                  />
-                </Paper>
-                <Paper sx={{ p: 2 }}>
-                  <DataManager 
-                    onDataImported={(data) => {
-                      setNodes(data.nodes);
-                    }} 
-                  />
-                </Paper>
-                {/* NLP response info box */}
-                {nlpInfo && (
-                  <Paper sx={{ p: 2, mt: 2, bgcolor: '#f5f5f5' }}>
-                    <strong>{t('routeInfo.title')}:</strong>
-                    <div>
-                      {nlpInfo.text && <div style={{ marginBottom: 8 }}>{nlpInfo.text}</div>}
-                      {nlpInfo.distance && <div>{t('routeInfo.distance')}: {nlpInfo.distance} km</div>}
-                      {nlpInfo.recommendations && (
-                        <div style={{ marginTop: 8 }}>
-                          <strong>{t('routeInfo.recommendations')}:</strong>
-                          <ul>
-                            {nlpInfo.recommendations.map((rec, i) => (
-                              <li key={i}>{rec}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
+            <Box sx={{ mt: 2 }}>
+              {tab === 0 && (
+                <>
+                  <Paper sx={{ p: 2, mb: 2 }}>
+                    <NodeForm onNodeAdd={handleNodeAdd} />
                   </Paper>
-                )}
-              </>
-            )}
+                  <Paper sx={{ p: 2, mb: 2 }}>
+                    <PathFinder 
+                      nodes={Object.keys(nodes)} 
+                      onPathFound={handlePathFound}
+                      onError={setError}
+                      onLoadingChange={setIsLoading}
+                    />
+                  </Paper>
+                  <Paper sx={{ p: 2 }}>
+                    <DataManager 
+                      onDataImported={(data) => {
+                        setNodes(data.nodes);
+                      }} 
+                    />
+                  </Paper>
+                </>
+              )}
+              {tab === 1 && (
+                <>
+                  <Paper sx={{ p: 2, mb: 2 }}>
+                    <NLPPathFinder 
+                      nodes={nodes}
+                      selectedPath={selectedPath}
+                      onPathFound={handlePathFound}
+                    />
+                  </Paper>
+                  {/* NLP response info box */}
+                  {nlpInfo && (
+                    <Paper sx={{ p: 2, mt: 2, bgcolor: '#f5f5f5' }}>
+                      <strong>{t('routeInfo.title')}:</strong>
+                      <div>
+                        {nlpInfo.text && <div style={{ marginBottom: 8 }}>{nlpInfo.text}</div>}
+                        {nlpInfo.distance && <div>{t('routeInfo.distance')}: {nlpInfo.distance} km</div>}
+                        {nlpInfo.recommendations && (
+                          <div style={{ marginTop: 8 }}>
+                            <strong>{t('routeInfo.recommendations')}:</strong>
+                            <ul>
+                              {nlpInfo.recommendations.map((rec, i) => (
+                                <li key={i}>{rec}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    </Paper>
+                  )}
+                </>
+              )}
+            </Box>
           </Box>
         </Drawer>
       )}

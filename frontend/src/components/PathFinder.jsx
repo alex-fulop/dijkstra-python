@@ -50,7 +50,13 @@ function PathFinder({ nodes, onPathFound, onError, onLoadingChange }) {
       
       const { path, distance, duration, route_info, node_sequence } = response.data;
       setResult({ path, distance, duration, route_info, node_sequence });
-      onPathFound({ path: node_sequence, coordinates: path });
+      onPathFound({ 
+        path: node_sequence, 
+        coordinates: path,
+        distance: distance,
+        duration: duration,
+        route_info: route_info
+      });
       onError(null);
     } catch (error) {
       console.error('Error finding path:', error);

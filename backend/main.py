@@ -335,6 +335,8 @@ async def find_path(request: PathRequest):
 @app.post("/nlp-path/")
 async def nlp_path_query(query: dict = Body(...), db: Session = Depends(get_db)):
     user_query = query.get("query")
+    current_route = query.get("current_route")
+
     if not user_query:
         raise HTTPException(status_code=400, detail="No query provided.")
 
@@ -343,67 +345,134 @@ async def nlp_path_query(query: dict = Body(...), db: Session = Depends(get_db))
     node_names = [node.name for node in db_nodes]
     node_list_str = ", ".join(node_names)
 
-    prompt = (
-        f"Available locations: {node_list_str}\n"
-        "Extract the following from this route query:\n"
-        "- start: the starting city (must be from the available ±locations)\n"
-        "- end: the destination city (must be from the available locations)\n"
-        "- waypoints: a list of cities or regions to pass through or stop at (must be from the available locations, can be empty)\n"
-        "- avoid: a list of cities or regions to avoid (must be from the available locations, can be empty)\n"
-        "- preferences: a list of route preferences (e.g., 'scenic', 'fastest', 'avoid highways', etc.)\n"
-        "Respond as JSON with keys: start, end, waypoints, avoid, preferences. "
-        "Only use the available locations for start, end, waypoints, and avoid.\n\n"
-        f'Query: "{user_query}"'
-    )
+    try:
+        model = genai.GenerativeModel("gemini-1.5-flash")
+
+        if current_route:
+            # Handle follow-up questions about the current route
+            prompt = (
+                f"Current route: {current_route['path']}\n"
+                f"Total distance: {current_route['distance']} km\n\n"
+                f"User question: {user_query}\n\n"
+                "Provide a helpful response about the route, focusing on:\n"
+                "- Tourist attractions and activities\n"
+                "- Local cuisine and restaurants\n"
+                "- Cultural events and festivals\n"
+                "- Travel tips and recommendations\n"
+                "Make the response conversational and engaging."
+            )
+            response = model.generate_content(prompt)
+            return {"response": response.text.strip()}
+        else:
+            # Initial route calculation
+            prompt = (
+                f"Available locations: {node_list_str}\n\n"
+                "The user wants travel recommendations. If they haven't specified a route, ask them to provide a starting point and destination from the available locations.\n"
+                "If they have specified a route, extract the following:\n"
+                "- start: the starting city (must be from the available locations)\n"
+                "- end: the destination city (must be from the available locations)\n"
+                "- waypoints: a list of cities or regions to pass through or stop at (must be from the available locations, can be empty)\n"
+                "- avoid: a list of cities or regions to avoid (must be from the available locations, can be empty)\n"
+                "- preferences: a list of route preferences (e.g., 'scenic', 'fastest', 'avoid highways', etc.)\n\n"
+                "If no route is specified, respond with a JSON containing only a 'message' key with a friendly prompt asking for a route.\n"
+                "If a route is specified, respond with a JSON containing: start, end, waypoints, avoid, preferences.\n"
+                "Only use the available locations for start, end, waypoints, and avoid.\n\n"
+                f'Query: "{user_query}"'
+            )
+            response = model.generate_content(prompt)
+            content = response.text.strip()
+            json_str = extract_json_from_text(content)
+            if not json_str:
+                raise ValueError("No JSON found in model response.")
+            parsed = json.loads(json_str)
+
+            # If no route was specified, return a friendly message
+            if "message" in parsed:
+                return {
+                    "path": [],
+                    "distance": 0,
+                    "preferences": [],
+                    "tourist_info": {},
+                    "message": parsed["message"],
+                }
+
+            # Validate locations
+            for key in ["start", "end"]:
+                if parsed.get(key) not in node_names:
+                    raise ValueError(
+                        f"Location '{parsed.get(key)}' is not in the available nodes."
+                    )
+            for key in ["waypoints", "avoid"]:
+                for loc in parsed.get(key, []):
+                    if loc not in node_names:
+                        raise ValueError(
+                            f"Location '{loc}' is not in the available nodes."
+                        )
+
+            start = find_node_fuzzy(parsed.get("start"), node_names)
+            end = find_node_fuzzy(parsed.get("end"), node_names)
+            waypoints = [
+                find_node_fuzzy(wp, node_names)
+                for wp in parsed.get("waypoints", [])
+                if find_node_fuzzy(wp, node_names)
+            ]
+            avoid = [
+                find_node_fuzzy(av, node_names)
+                for av in parsed.get("avoid", [])
+                if find_node_fuzzy(av, node_names)
+            ]
+
+            if not start or not end:
+                raise ValueError("Start or end location not found in available nodes.")
+
+            # Use waypoints if provided, else classic Dijkstra
+            if waypoints:
+                path, distance = dijkstra.find_path_with_waypoints(
+                    start, waypoints, end, avoid=avoid
+                )
+            else:
+                path, distance = dijkstra.find_shortest_path(start, end, avoid=avoid)
+
+            # Get tourist information for each node in the path
+            tourist_info = {}
+            for node in path:
+                prompt = f"Provide tourist information for {node} including:\n- Top 3 attractions to visit\n- 2 recommended restaurants\n- Any special events or festivals\n- Best time to visit\nFormat the response as a JSON with these keys: attractions, restaurants, events, best_time"
+                response = model.generate_content(prompt)
+                content = response.text.strip()
+                json_str = extract_json_from_text(content)
+                if json_str:
+                    tourist_info[node] = json.loads(json_str)
+
+            return {
+                "path": path,
+                "distance": distance,
+                "preferences": parsed.get("preferences", []),
+                "tourist_info": tourist_info,
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/tourist-info/")
+async def get_tourist_info(route: dict = Body(...)):
+    """Get tourist information for a list of locations"""
+    locations = route.get("locations", [])
+    if not locations:
+        raise HTTPException(status_code=400, detail="No locations provided.")
 
     try:
         model = genai.GenerativeModel("gemini-1.5-flash")
-        response = model.generate_content(prompt)
-        content = response.text.strip()
-        json_str = extract_json_from_text(content)
-        if not json_str:
-            raise ValueError("No JSON found in model response.")
-        parsed = json.loads(json_str)
+        tourist_info = {}
 
-        # Validate locations
-        for key in ["start", "end"]:
-            if parsed.get(key) not in node_names:
-                raise ValueError(
-                    f"Location '{parsed.get(key)}' is not in the available nodes."
-                )
-        for key in ["waypoints", "avoid"]:
-            for loc in parsed.get(key, []):
-                if loc not in node_names:
-                    raise ValueError(f"Location '{loc}' is not in the available nodes.")
+        for location in locations:
+            prompt = f"Provide tourist information for {location} including:\n- Top 3 attractions to visit\n- 2 recommended restaurants\n- Any special events or festivals\n- Best time to visit\nFormat the response as a JSON with these keys: attractions, restaurants, events, best_time"
+            response = model.generate_content(prompt)
+            content = response.text.strip()
+            json_str = extract_json_from_text(content)
+            if json_str:
+                tourist_info[location] = json.loads(json_str)
 
-        start = find_node_fuzzy(parsed.get("start"), node_names)
-        end = find_node_fuzzy(parsed.get("end"), node_names)
-        waypoints = [
-            find_node_fuzzy(wp, node_names)
-            for wp in parsed.get("waypoints", [])
-            if find_node_fuzzy(wp, node_names)
-        ]
-        avoid = [
-            find_node_fuzzy(av, node_names)
-            for av in parsed.get("avoid", [])
-            if find_node_fuzzy(av, node_names)
-        ]
-
-        if not start or not end:
-            raise ValueError("Start or end location not found in available nodes.")
-
-        # Use waypoints if provided, else classic Dijkstra
-        if waypoints:
-            path, distance = dijkstra.find_path_with_waypoints(
-                start, waypoints, end, avoid=avoid
-            )
-        else:
-            path, distance = dijkstra.find_shortest_path(start, end, avoid=avoid)
-        return {
-            "path": path,
-            "distance": distance,
-            "preferences": parsed.get("preferences", []),
-        }
+        return {"tourist_info": tourist_info}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

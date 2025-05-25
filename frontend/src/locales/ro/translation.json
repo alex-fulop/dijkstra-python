@@ -17,8 +17,11 @@
     "avoid": "Noduri de Evitat"
   },
   "nlpPathFinder": {
-    "description": "Descrie ruta ta (ex: 'Vreau să merg din Oradea în Constanța cu o oprire pitorească')",
-    "getRoute": "Obține Rută Personalizată"
+    "getStarted": "Începe cu recomandări de călătorie",
+    "getRecommendations": "Obține Recomandări de Călătorie",
+    "askQuestion": "Întreabă despre ruta ta...",
+    "welcomeMessage": "Am găsit o rută pentru tine: {route}\nDistanța totală: {distance} km\n\nIată câteva recomandări pentru călătoria ta:",
+    "locationInfo": "📍 {location}\n\n🏛️ Atracții Principale:\n• {attractions}\n\n🍽️ Restaurante Recomandate:\n• {restaurants}\n\n🎉 Evenimente și Festivaluri:\n{events}\n\n⏰ Cel Mai Bun Moment de Vizitat:\n{bestTime}"
   },
   "dataManager": {
     "import": "Importă Date",
@@ -27,7 +30,12 @@
   "routeInfo": {
     "title": "Informații Rută",
     "distance": "Distanță",
-    "recommendations": "Recomandări"
+    "recommendations": "Recomandări",
+    "touristGuide": "Ghid Turistic",
+    "attractions": "Atracții Principale",
+    "restaurants": "Restaurante Recomandate",
+    "events": "Evenimente și Festivaluri",
+    "bestTime": "Cel Mai Bun Moment de Vizitat"
   },
   "map": {
     "deleteNode": "Șterge Nod",
