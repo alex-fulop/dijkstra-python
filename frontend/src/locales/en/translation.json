@@ -13,7 +13,14 @@
   "pathFinder": {
     "start": "Start Node",
     "end": "End Node",
-    "find": "Find Path"
+    "find": "Find Path",
+    "avoid": "Nodes to Avoid",
+    "noPathFound": "No valid path found from {start} to {end}{avoidText}",
+    "noPathFoundTip": "No valid path found from {start} to {end}{avoidText}"
+  },
+  "nlpPathFinder": {
+    "description": "Describe your route (e.g. 'I want to go from Oradea to Constanta with a scenic stop')",
+    "getRoute": "Get Personalized Route"
   },
   "dataManager": {
     "import": "Import Data",
@@ -26,6 +33,8 @@
   },
   "map": {
     "deleteNode": "Delete Node",
-    "addNode": "Add Node"
+    "addNode": "Add Node",
+    "edgeCreation": "Shift+Click another node to create an edge from {node}",
+    "selectedEdge": "Selected edge: {source} → {target}"
   }
 } 

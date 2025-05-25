@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { TextField, Button, Box, Typography, CircularProgress } from '@mui/material';
 import axios from 'axios';
+import { useTranslation } from 'react-i18next';
 
 function NLPPathFinder({ nodes, onPathFound }) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -33,7 +35,7 @@ function NLPPathFinder({ nodes, onPathFound }) {
     <Box>
       <form onSubmit={handleSubmit}>
         <TextField
-          label="Describe your route (e.g. 'I want to go from Oradea to Constanta with a scenic stop')"
+          label={t('nlpPathFinder.description')}
           value={query}
           onChange={e => setQuery(e.target.value)}
           fullWidth
@@ -44,7 +46,7 @@ function NLPPathFinder({ nodes, onPathFound }) {
           InputProps={{ style: { fontSize: 18 } }}
         />
         <Button type="submit" variant="contained" fullWidth disabled={loading || !query}>
-          {loading ? <CircularProgress size={24} /> : "Get Personalized Route"}
+          {loading ? <CircularProgress size={24} /> : t('nlpPathFinder.getRoute')}
         </Button>
       </form>
     </Box>

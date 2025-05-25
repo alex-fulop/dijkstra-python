@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
-import { TextField, Button, Box, MenuItem, Typography } from '@mui/material';
+import { TextField, Button, Box, Typography, Autocomplete } from '@mui/material';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 
-function PathFinder({ nodes, onPathFound }) {
+function PathFinder({ nodes, onPathFound, onError }) {
   const { t } = useTranslation();
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
+  const [avoid, setAvoid] = useState([]);
   const [result, setResult] = useState(null);
 
   // Reset selections if nodes are deleted
@@ -21,21 +22,38 @@ function PathFinder({ nodes, onPathFound }) {
       setResult(null);
       onPathFound(null);  // Clear the path on the map
     }
-  }, [nodes, start, end, onPathFound]);
+    // Remove any avoided nodes that no longer exist
+    setAvoid(avoid.filter(node => nodes.includes(node)));
+  }, [nodes, start, end, onPathFound, avoid]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       const response = await axios.post('http://localhost:8000/path/', {
         start,
-        end
+        end,
+        avoid
       });
       
       const { path, distance } = response.data;
       setResult({ path, distance });
       onPathFound(path);
+      onError(null);
     } catch (error) {
       console.error('Error finding path:', error);
+      
+      // Check if it's a "no path found" error
+      if (error.response?.status === 404) {
+        // Pass all parameters to the translation function
+        onError(t('pathFinder.noPathFound', { 
+          start, 
+          end, 
+          avoidText: avoid.length > 0 ? t('pathFinder.avoiding', { nodes: avoid.join(', ') }) : ''
+        }));
+      } else {
+        onError(t('pathFinder.error'));
+      }
+      
       setResult(null);
       onPathFound(null);
     }
@@ -44,39 +62,53 @@ function PathFinder({ nodes, onPathFound }) {
   return (
     <Box>
       <Box component="form" onSubmit={handleSubmit}>
-        <TextField
-          select
-          label={t('pathFinder.start')}
+        <Autocomplete
           value={start}
-          onChange={(e) => setStart(e.target.value)}
-          margin="normal"
-          fullWidth
-        >
-          {nodes.map((node) => (
-            <MenuItem key={node} value={node}>
-              {node}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          select
-          label={t('pathFinder.end')}
+          onChange={(_, newValue) => setStart(newValue)}
+          options={nodes}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label={t('pathFinder.start')}
+              margin="normal"
+              fullWidth
+            />
+          )}
+        />
+        <Autocomplete
           value={end}
-          onChange={(e) => setEnd(e.target.value)}
-          margin="normal"
-          fullWidth
-        >
-          {nodes.map((node) => (
-            <MenuItem key={node} value={node}>
-              {node}
-            </MenuItem>
-          ))}
-        </TextField>
+          onChange={(_, newValue) => setEnd(newValue)}
+          options={nodes}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label={t('pathFinder.end')}
+              margin="normal"
+              fullWidth
+            />
+          )}
+        />
+        <Autocomplete
+          multiple
+          freeSolo
+          options={nodes.filter(node => node !== start && node !== end)}
+          value={avoid}
+          onChange={(_, newValue) => setAvoid(newValue)}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label={t('pathFinder.avoid')}
+              margin="normal"
+              fullWidth
+            />
+          )}
+        />
         <Button 
           type="submit" 
           variant="contained" 
           fullWidth
           disabled={!start || !end}
+          sx={{ mt: 2 }}
         >
           {t('pathFinder.find')}
         </Button>

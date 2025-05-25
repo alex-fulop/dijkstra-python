@@ -12,12 +12,15 @@ function NodeForm({ onNodeAdd }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post('http://localhost:8000/nodes/', {
+      const response = await axios.post('http://localhost:8000/nodes/', {
         name,
         latitude: parseFloat(lat),
         longitude: parseFloat(lng)
       });
-      onNodeAdd({ name, latitude: parseFloat(lat), longitude: parseFloat(lng) });
+      
+      // Call onNodeAdd with the response data to update both nodes and edges
+      onNodeAdd(response.data);
+      
       setName('');
       setLat('');
       setLng('');

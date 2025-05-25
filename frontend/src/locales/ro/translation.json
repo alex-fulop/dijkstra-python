@@ -13,7 +13,12 @@
   "pathFinder": {
     "start": "Nod de Pornire",
     "end": "Nod de Destinație",
-    "find": "Găsește Ruta"
+    "find": "Găsește Ruta",
+    "avoid": "Noduri de Evitat"
+  },
+  "nlpPathFinder": {
+    "description": "Descrie ruta ta (ex: 'Vreau să merg din Oradea în Constanța cu o oprire pitorească')",
+    "getRoute": "Obține Rută Personalizată"
   },
   "dataManager": {
     "import": "Importă Date",

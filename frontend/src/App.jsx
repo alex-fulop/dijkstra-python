@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Paper, IconButton, Drawer, Tabs, Tab, Button, ButtonGroup } from '@mui/material';
+import { Box, Paper, IconButton, Drawer, Tabs, Tab, Button, ButtonGroup, Snackbar, Alert } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import Map from './components/Map';
@@ -18,6 +18,7 @@ function App() {
   const [nlpInfo, setNlpInfo] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [tab, setTab] = useState(0);
+  const [error, setError] = useState(null);
 
   // Fetch nodes when the app starts
   useEffect(() => {
@@ -45,8 +46,9 @@ function App() {
     }
   };
 
-  const handleNodeAdd = async () => {
+  const handleNodeAdd = async (nodeData) => {
     try {
+      // Fetch updated nodes
       const response = await axios.get('http://localhost:8000/nodes/');
       setNodes(response.data);
     } catch (error) {
@@ -122,7 +124,8 @@ function App() {
                 <Paper sx={{ p: 2, mb: 2 }}>
                   <PathFinder 
                     nodes={Object.keys(nodes)} 
-                    onPathFound={setSelectedPath} 
+                    onPathFound={setSelectedPath}
+                    onError={setError}
                   />
                 </Paper>
                 <Paper sx={{ p: 2 }}>
@@ -203,6 +206,7 @@ function App() {
           width: '100vw',
           transition: 'all 0.3s',
           bgcolor: '#eaeaea',
+          position: 'relative',
         }}
       >
         <Map 
@@ -211,6 +215,25 @@ function App() {
           onNodeDelete={handleNodeDelete}
           onNodeAdd={handleNodeAdd}
         />
+        
+        {/* Error Snackbar */}
+        <Snackbar 
+          open={!!error} 
+          autoHideDuration={6000} 
+          onClose={() => setError(null)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+          sx={{
+            position: 'absolute',
+            bottom: 16,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 1400,
+          }}
+        >
+          <Alert onClose={() => setError(null)} severity="error" sx={{ width: '100%' }}>
+            {error}
+          </Alert>
+        </Snackbar>
       </Box>
     </Box>
   );

@@ -1,0 +1,41 @@
+{
+  "tabs": {
+    "shortestRoute": "Shortest Route",
+    "personalizedNLP": "Personalized NLP"
+  },
+  "nodeForm": {
+    "name": "Node Name",
+    "latitude": "Latitude",
+    "longitude": "Longitude",
+    "add": "Add Node"
+  },
+  "pathFinder": {
+    "source": "Source Node",
+    "target": "Target Node",
+    "avoid": "Nodes to Avoid",
+    "calculate": "Calculate Path",
+    "error": "Could not calculate path. Please try different nodes.",
+    "noPathFound": "No valid path found from {start} to {end}{avoidText}",
+    "noPathFoundTip": "No valid path found from {start} to {end}{avoidText}",
+    "avoiding": " while avoiding {nodes}"
+  },
+  "routeInfo": {
+    "title": "Route Information",
+    "distance": "Total Distance",
+    "recommendations": "Recommendations"
+  },
+  "dataManager": {
+    "import": "Import Data",
+    "export": "Export Data",
+    "importSuccess": "Data imported successfully",
+    "exportSuccess": "Data exported successfully",
+    "importError": "Error importing data",
+    "exportError": "Error exporting data"
+  },
+  "map": {
+    "deleteNode": "Delete Node",
+    "addNode": "Add Node",
+    "edgeCreation": "Shift+Click another node to create an edge from {node}",
+    "selectedEdge": "Selected edge: {source} → {target}"
+  }
+} 

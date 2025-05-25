@@ -69,7 +69,47 @@ async def add_node(node: NodeCreate, db: Session = Depends(get_db)):
         # Update in-memory graph
         dijkstra.graph[node.name] = []
 
-        return {"message": f"Added node {node.name}"}
+        # Find nearby nodes and create edges
+        MAX_DISTANCE = (
+            100  # Maximum distance in kilometers to consider nodes as neighbors
+        )
+        nearby_nodes = []
+
+        # Get all existing nodes
+        existing_nodes = db.query(Node).filter(Node.name != node.name).all()
+
+        for existing_node in existing_nodes:
+            distance = dijkstra.calculate_distance(
+                node.latitude,
+                node.longitude,
+                existing_node.latitude,
+                existing_node.longitude,
+            )
+
+            if distance <= MAX_DISTANCE:
+                nearby_nodes.append((existing_node, distance))
+
+        # Create edges to nearby nodes
+        created_edges = []
+        for nearby_node, distance in nearby_nodes:
+            # Create edge in database
+            db_edge = Edge(
+                source_id=db_node.id, target_id=nearby_node.id, weight=distance
+            )
+            db.add(db_edge)
+            created_edges.append((nearby_node.name, distance))
+
+            # Update in-memory graph
+            dijkstra.add_edge(node.name, nearby_node.name, distance)
+
+        db.commit()
+
+        return {
+            "message": f"Added node {node.name}",
+            "connected_to": [
+                {"node": name, "distance": dist} for name, dist in created_edges
+            ],
+        }
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
@@ -223,6 +263,9 @@ async def find_path(path_request: dict = Body(...), db: Session = Depends(get_db
     try:
         start = path_request.get("start")
         end = path_request.get("end")
+        avoid = path_request.get("avoid", [])
+
+        print(f"Path request - start: {start}, end: {end}, avoid: {avoid}")
 
         if not start or not end:
             raise HTTPException(
@@ -232,6 +275,8 @@ async def find_path(path_request: dict = Body(...), db: Session = Depends(get_db
         # Get all nodes from database
         db_nodes = db.query(Node).all()
         db_edges = db.query(Edge).all()
+
+        print(f"Found {len(db_nodes)} nodes and {len(db_edges)} edges in database")
 
         # Clear existing graph and rebuild it
         dijkstra.graph = {}
@@ -246,16 +291,29 @@ async def find_path(path_request: dict = Body(...), db: Session = Depends(get_db
             target = db.query(Node).filter(Node.id == edge.target_id).first()
             dijkstra.add_edge(source.name, target.name, edge.weight)
 
-        # Find shortest path
-        path, distance = dijkstra.find_shortest_path(start, end)
+        print(f"Graph built with {len(dijkstra.graph)} nodes")
 
-        if not path:
+        # Find shortest path
+        path, distance = dijkstra.find_shortest_path(start, end, avoid=avoid)
+
+        print(f"Path calculation result - path: {path}, distance: {distance}")
+
+        if not path or distance == float("inf"):
+            avoid_str = f" while avoiding {', '.join(avoid)}" if avoid else ""
             raise HTTPException(
-                status_code=404, detail="No path found between the specified nodes"
+                status_code=404,
+                detail=f"No valid path found from {start} to {end}{avoid_str}",
             )
 
         return {"path": path, "distance": distance}
     except Exception as e:
+        print(f"Error in find_path: {str(e)}")
+        print(f"Error type: {type(e)}")
+        import traceback
+
+        print(f"Traceback: {traceback.format_exc()}")
+        if isinstance(e, HTTPException):
+            raise e
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -273,7 +331,7 @@ async def nlp_path_query(query: dict = Body(...), db: Session = Depends(get_db))
     prompt = (
         f"Available locations: {node_list_str}\n"
         "Extract the following from this route query:\n"
-        "- start: the starting city (must be from the available locations)\n"
+        "- start: the starting city (must be from the available ±locations)\n"
         "- end: the destination city (must be from the available locations)\n"
         "- waypoints: a list of cities or regions to pass through or stop at (must be from the available locations, can be empty)\n"
         "- avoid: a list of cities or regions to avoid (must be from the available locations, can be empty)\n"
