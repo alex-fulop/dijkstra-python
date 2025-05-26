@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Body, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Tuple
 from dijkstra import DijkstraAlgorithm
 from ai_pathfinder import AIPathfinder
 from osrm_service import OSRMService
@@ -41,6 +41,9 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # Load your API key from environment variable
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+
+# Add at the top with other global variables
+K_VALUE = 3  # Default K value for KNN
 
 
 def initialize_routing_service(db: Session):
@@ -95,6 +98,34 @@ class PathRequest(BaseModel):
     avoid: Optional[List[str]] = None
 
 
+class KValueUpdate(BaseModel):
+    k: int
+
+
+def find_k_nearest_neighbors(
+    node: Node, existing_nodes: List[Node], k: int = 3
+) -> List[Tuple[Node, float]]:
+    """Find the k nearest neighbors for a given node"""
+    distances = []
+    for existing_node in existing_nodes:
+        if existing_node.id != node.id:  # Don't include the node itself
+            distance = dijkstra.calculate_distance(
+                node.latitude,
+                node.longitude,
+                existing_node.latitude,
+                existing_node.longitude,
+            )
+            distances.append((existing_node, distance))
+
+    # Sort by distance and return k nearest
+    distances.sort(key=lambda x: x[1])
+
+    # Ensure we don't return more neighbors than available
+    k = min(k, len(distances))
+
+    return distances[:k]
+
+
 @app.post("/nodes/")
 async def add_node(node: NodeCreate, db: Session = Depends(get_db)):
     try:
@@ -115,49 +146,45 @@ async def add_node(node: NodeCreate, db: Session = Depends(get_db)):
         # Add node to routing service
         routing_service.add_node(node.name, node.latitude, node.longitude)
 
-        # Find nearby nodes and create edges
-        MAX_DISTANCE = (
-            100  # Maximum distance in kilometers to consider nodes as neighbors
-        )
-        nearby_nodes = []
-
         # Get all existing nodes
         existing_nodes = db.query(Node).filter(Node.name != node.name).all()
 
-        for existing_node in existing_nodes:
-            distance = dijkstra.calculate_distance(
-                node.latitude,
-                node.longitude,
-                existing_node.latitude,
-                existing_node.longitude,
+        # Only proceed with edge creation if there are existing nodes
+        if existing_nodes:
+            # Find k nearest neighbors using global K_VALUE
+            nearest_neighbors = find_k_nearest_neighbors(
+                db_node, existing_nodes, K_VALUE
             )
 
-            if distance <= MAX_DISTANCE:
-                nearby_nodes.append((existing_node, distance))
+            # Create edges to k nearest neighbors
+            created_edges = []
+            for neighbor, distance in nearest_neighbors:
+                try:
+                    # Create edge in database
+                    db_edge = Edge(
+                        source_id=db_node.id, target_id=neighbor.id, weight=distance
+                    )
+                    db.add(db_edge)
+                    created_edges.append((neighbor.name, distance))
 
-        # Create edges to nearby nodes
-        created_edges = []
-        for nearby_node, distance in nearby_nodes:
-            # Create edge in database
-            db_edge = Edge(
-                source_id=db_node.id, target_id=nearby_node.id, weight=distance
-            )
-            db.add(db_edge)
-            created_edges.append((nearby_node.name, distance))
+                    # Update in-memory graph
+                    dijkstra.add_edge(node.name, neighbor.name, distance)
 
-            # Update in-memory graph
-            dijkstra.add_edge(node.name, nearby_node.name, distance)
+                    # Add edge to routing service
+                    routing_service.add_edge(node.name, neighbor.name)
+                except Exception as edge_error:
+                    print(f"Error creating edge to {neighbor.name}: {str(edge_error)}")
+                    continue
 
-            # Add edge to routing service
-            routing_service.add_edge(node.name, nearby_node.name)
-
-        db.commit()
+            db.commit()
 
         return {
             "message": f"Added node {node.name}",
-            "connected_to": [
-                {"node": name, "distance": dist} for name, dist in created_edges
-            ],
+            "connected_to": (
+                [{"node": name, "distance": dist} for name, dist in created_edges]
+                if existing_nodes
+                else []
+            ),
         }
     except Exception as e:
         db.rollback()
@@ -232,41 +259,38 @@ async def import_json(data: Dict, db: Session = Depends(get_db)):
         db.commit()
         print("Nodes added successfully")
 
-        # Add new edges
-        print("Adding edges...")
-        for source, target, weight in edges_data:
-            try:
-                source_node = db.query(Node).filter(Node.name == source).first()
-                target_node = db.query(Node).filter(Node.name == target).first()
+        # For each node, find and create edges to its k nearest neighbors
+        print("Creating edges using KNN...")
+        all_nodes = db.query(Node).all()
 
-                if not source_node:
-                    raise ValueError(f"Source node '{source}' not found")
-                if not target_node:
-                    raise ValueError(f"Target node '{target}' not found")
+        for node in all_nodes:
+            nearest_neighbors = find_k_nearest_neighbors(node, all_nodes, K_VALUE)
 
+            for neighbor, distance in nearest_neighbors:
                 # Check if edge already exists
                 existing_edge = (
                     db.query(Edge)
                     .filter(
-                        Edge.source_id == source_node.id,
-                        Edge.target_id == target_node.id,
+                        ((Edge.source_id == node.id) & (Edge.target_id == neighbor.id))
+                        | (
+                            (Edge.source_id == neighbor.id)
+                            & (Edge.target_id == node.id)
+                        )
                     )
                     .first()
                 )
 
                 if not existing_edge:
                     db_edge = Edge(
-                        source_id=source_node.id,
-                        target_id=target_node.id,
-                        weight=weight,
+                        source_id=node.id, target_id=neighbor.id, weight=distance
                     )
                     db.add(db_edge)
-                    print(f"Added edge: {source} -> {target} with weight {weight}")
-            except Exception as edge_error:
-                print(f"Error adding edge {source} -> {target}: {str(edge_error)}")
-                raise
+                    print(
+                        f"Added edge: {node.name} -> {neighbor.name} with weight {distance}"
+                    )
+
         db.commit()
-        print("Edges added successfully")
+        print("Edges created successfully")
 
         # Update in-memory graph
         print("Updating in-memory graph...")
@@ -282,7 +306,6 @@ async def import_json(data: Dict, db: Session = Depends(get_db)):
 
         return {"message": "Data imported successfully"}
     except Exception as e:
-        print(f"Error in import_json: {str(e)}")
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -561,3 +584,75 @@ async def get_edges(db: Session = Depends(get_db)):
         return edges
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/update-k-value/")
+async def update_k_value(k_update: KValueUpdate, db: Session = Depends(get_db)):
+    """Update the K value and rebuild the graph"""
+    global K_VALUE
+    try:
+        if k_update.k < 1:
+            raise HTTPException(status_code=400, detail="K value must be at least 1")
+        if k_update.k > 10:
+            raise HTTPException(status_code=400, detail="K value cannot exceed 10")
+
+        print(f"\n=== Starting K value update to {k_update.k} ===")
+        K_VALUE = k_update.k
+
+        # Clear existing edges
+        print("Clearing existing edges...")
+        db.query(Edge).delete()
+        db.commit()
+        print("Existing edges cleared")
+
+        # Clear in-memory graph
+        print("Clearing in-memory graph...")
+        dijkstra.graph = {}
+        for node in db.query(Node).all():
+            dijkstra.graph[node.name] = []
+        print("In-memory graph cleared")
+
+        # Rebuild graph with new K value
+        all_nodes = db.query(Node).all()
+        print(f"\nRebuilding graph with {len(all_nodes)} nodes")
+        total_edges = 0
+
+        for node in all_nodes:
+            # Find k nearest neighbors for this node
+            nearest_neighbors = find_k_nearest_neighbors(node, all_nodes, K_VALUE)
+            print(f"\nNode {node.name}:")
+            print(f"Found {len(nearest_neighbors)} neighbors")
+            for neighbor, distance in nearest_neighbors:
+                print(f"  - {neighbor.name} (distance: {distance:.2f})")
+
+            # Create edges to k nearest neighbors
+            for neighbor, distance in nearest_neighbors:
+                # Create edge in database
+                db_edge = Edge(
+                    source_id=node.id, target_id=neighbor.id, weight=distance
+                )
+                db.add(db_edge)
+                total_edges += 1
+
+                # Update in-memory graph
+                dijkstra.add_edge(node.name, neighbor.name, distance)
+
+                # Add edge to routing service
+                routing_service.add_edge(node.name, neighbor.name)
+
+        db.commit()
+        print(f"\n=== Graph rebuild complete ===")
+        print(f"Total edges created: {total_edges}")
+        print(f"Average edges per node: {total_edges/len(all_nodes):.2f}")
+
+        return {"message": f"Graph rebuilt with K={K_VALUE}"}
+    except Exception as e:
+        db.rollback()
+        print(f"Error updating K value: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/k-value/")
+async def get_k_value():
+    """Get the current K value"""
+    return {"k": K_VALUE}

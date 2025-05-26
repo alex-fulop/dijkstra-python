@@ -1,5 +1,5 @@
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents } from 'react-leaflet';
-import { IconButton, Box, Typography, TextField, Button, Switch, FormControlLabel, Tooltip, CircularProgress } from '@mui/material';
+import { IconButton, Box, Typography, TextField, Button, Switch, FormControlLabel, Tooltip, CircularProgress, Slider } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CloseIcon from '@mui/icons-material/Close';
 import axios from 'axios';
@@ -23,27 +23,90 @@ function Map({ nodes, selectedPath, onNodeDelete, onNodeAdd, isLoading }) {
   const [newNodeName, setNewNodeName] = useState('');
   const [showAllEdges, setShowAllEdges] = useState(false);
   const [allEdges, setAllEdges] = useState([]);
-  const [edgeSourceNode, setEdgeSourceNode] = useState(null);
   const [selectedEdge, setSelectedEdge] = useState(null);
+  const [kValue, setKValue] = useState(3);
+  const [isUpdatingK, setIsUpdatingK] = useState(false);
+  const [debouncedKValue, setDebouncedKValue] = useState(3);
+  const [lastUpdatedK, setLastUpdatedK] = useState(3); // Add this to track the last successfully updated K value
+
+  // Add effect to fetch edges when nodes change
+  useEffect(() => {
+    console.log('Nodes changed, fetching edges...');
+    fetchEdges();
+  }, [nodes]);
+
+  // Add debounce effect for K value updates
+  useEffect(() => {
+    console.log('K value changed to:', kValue);
+    const timer = setTimeout(() => {
+      if (debouncedKValue !== kValue) {
+        console.log('Setting debounced value to:', kValue);
+        setDebouncedKValue(kValue);
+      } 
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timer);
+  }, [kValue]);
+
+  // Handle actual K value updates
+  useEffect(() => {
+    console.log('Debounced K value changed to:', debouncedKValue);
+    const updateKValue = async () => {
+      if (debouncedKValue === lastUpdatedK) {
+        console.log('Skipping update - value already updated');
+        return;
+      }
+      
+      console.log('Updating K value to:', debouncedKValue);
+      setIsUpdatingK(true);
+      try {
+        const response = await axios.post('http://localhost:8000/update-k-value/', { k: debouncedKValue });
+        console.log('K value update response:', response.data);
+        setLastUpdatedK(debouncedKValue); // Update the last updated value
+        setKValue(debouncedKValue);
+        
+        // Force a refresh of edges
+        const edges = await fetchEdges();
+        console.log('Edges after K update:', edges);
+        
+        // Force a re-render of the edges
+        setAllEdges([]);
+        setTimeout(() => {
+          setAllEdges(edges);
+        }, 100);
+      } catch (error) {
+        console.error('Error updating K value:', error);
+        setKValue(lastUpdatedK); // Revert to last successful value
+      } finally {
+        setIsUpdatingK(false);
+      }
+    };
+
+    updateKValue();
+  }, [debouncedKValue]);
+
+  // Add effect to log edge changes
+  useEffect(() => {
+    console.log('Edges updated:', allEdges);
+  }, [allEdges]);
 
   const fetchEdges = async () => {
     try {
       const response = await axios.get('http://localhost:8000/edges/');
+      console.log('Fetched edges:', response.data);
       setAllEdges(response.data);
+      return response.data;
     } catch (error) {
       console.error('Error fetching edges:', error);
+      return null;
     }
   };
-
-  useEffect(() => {
-    fetchEdges();
-  }, []);
 
   const handleDelete = async (nodeName) => {
     try {
       await axios.delete(`http://localhost:8000/nodes/${nodeName}`);
       onNodeDelete(nodeName);
-      fetchEdges(); // Refresh edges after deletion
+      await fetchEdges(); // Wait for edges to be fetched
     } catch (error) {
       console.error('Error deleting node:', error);
     }
@@ -60,7 +123,7 @@ function Map({ nodes, selectedPath, onNodeDelete, onNodeAdd, isLoading }) {
       if (edge) {
         await axios.delete(`http://localhost:8000/edges/${edge.id}`);
         setSelectedEdge(null);
-        fetchEdges(); // Refresh edges after deletion
+        await fetchEdges(); // Wait for edges to be fetched
       }
     } catch (error) {
       console.error('Error deleting edge:', error);
@@ -76,46 +139,45 @@ function Map({ nodes, selectedPath, onNodeDelete, onNodeAdd, isLoading }) {
     if (!newNodeName.trim()) return;
     
     try {
+      // First add the node
       const response = await axios.post('http://localhost:8000/nodes/', {
         name: newNodeName,
         latitude: clickedPosition.lat,
         longitude: clickedPosition.lng
       });
+
+      // Wait a bit to ensure the node is properly initialized
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Refresh the nodes list
+      onNodeAdd();
+      
+      // Clear the form
       setClickedPosition(null);
       setNewNodeName('');
-      onNodeAdd();
-      fetchEdges(); // Refresh edges after adding a node
+
+      // Fetch updated edges
+      await fetchEdges();
     } catch (error) {
       console.error('Error adding node:', error);
+      // Show error to user
+      alert(error.response?.data?.detail || 'Error adding node. Please try again.');
     }
   };
 
   const handleNodeClick = async (nodeName, event) => {
-    if (event.shiftKey && edgeSourceNode && edgeSourceNode !== nodeName) {
-      // Create edge between nodes
-      try {
-        await axios.post('http://localhost:8000/edges/', {
-          source: edgeSourceNode,
-          target: nodeName
-        });
-        setEdgeSourceNode(null);
-        fetchEdges(); // Refresh edges after adding new edge
-      } catch (error) {
-        console.error('Error creating edge:', error);
-        setEdgeSourceNode(null);
-      }
-    } else if (!event.shiftKey) {
-      // Select node for edge creation
-      setEdgeSourceNode(nodeName);
-    }
+    // Remove shift-click functionality
+    return;
   };
 
   const getEdgeColor = (source, target) => {
-    if (selectedPath && selectedPath.path && selectedPath.path.includes(source) && selectedPath.path.includes(target)) {
+    // Check if this edge is part of the selected path
+    if (selectedPath && selectedPath.path) {
       const sourceIndex = selectedPath.path.indexOf(source);
       const targetIndex = selectedPath.path.indexOf(target);
-      if (Math.abs(sourceIndex - targetIndex) === 1) {
-        return '#ff0000'; // Red for selected path
+      // Only highlight if both nodes are in the path and they are consecutive
+      if (sourceIndex !== -1 && targetIndex !== -1 && Math.abs(sourceIndex - targetIndex) === 1) {
+        return '#FFD700'; // Bright yellow for selected path
       }
     }
     
@@ -127,6 +189,24 @@ function Map({ nodes, selectedPath, onNodeDelete, onNodeAdd, isLoading }) {
     }
     
     return '#666666'; // Gray for other edges
+  };
+
+  const getEdgeWeight = (source, target) => {
+    // Make the selected path edges thicker
+    if (selectedPath && selectedPath.path) {
+      const sourceIndex = selectedPath.path.indexOf(source);
+      const targetIndex = selectedPath.path.indexOf(target);
+      // Only make thicker if both nodes are in the path and they are consecutive
+      if (sourceIndex !== -1 && targetIndex !== -1 && Math.abs(sourceIndex - targetIndex) === 1) {
+        return 4; // Thicker line for selected path
+      }
+    }
+    return 2; // Normal thickness for other edges
+  };
+
+  const handleKValueChange = (event, newValue) => {
+    console.log('Slider value changed:', newValue);
+    setKValue(newValue);
   };
 
   return (
@@ -167,7 +247,7 @@ function Map({ nodes, selectedPath, onNodeDelete, onNodeAdd, isLoading }) {
         </Box>
       )}
 
-      <Box sx={{ position: 'absolute', top: 16, right: 16, zIndex: 1000, bgcolor: 'white', p: 1, borderRadius: 1 }}>
+      <Box sx={{ position: 'absolute', top: 16, right: 16, zIndex: 1000, bgcolor: 'white', p: 2, borderRadius: 1, width: 300 }}>
         <FormControlLabel
           control={
             <Switch
@@ -175,19 +255,29 @@ function Map({ nodes, selectedPath, onNodeDelete, onNodeAdd, isLoading }) {
               onChange={(e) => setShowAllEdges(e.target.checked)}
             />
           }
-          label="Show All Edges"
+          label={t('map.showAllEdges')}
         />
-      </Box>
-      {edgeSourceNode && (
-        <Box sx={{ position: 'absolute', top: 16, left: 64, zIndex: 1000, bgcolor: 'white', p: 1, borderRadius: 1 }}>
-          <Typography variant="body2">
-            {t('map.edgeCreation', { node: edgeSourceNode })}
+        
+        <Box sx={{ mt: 2 }}>
+          <Typography id="k-value-slider" gutterBottom>
+            {t('map.routeDensity')}: {kValue}
           </Typography>
-          <IconButton size="small" onClick={() => setEdgeSourceNode(null)}>
-            <CloseIcon />
-          </IconButton>
+          <Slider
+            value={kValue}
+            onChange={handleKValueChange}
+            aria-labelledby="k-value-slider"
+            valueLabelDisplay="auto"
+            step={1}
+            marks
+            min={1}
+            max={10}
+            disabled={isUpdatingK}
+          />
+          <Typography variant="caption" color="text.secondary">
+            {t('map.routeDensityDescription')}
+          </Typography>
         </Box>
-      )}
+      </Box>
       {selectedEdge && (
         <Box sx={{ position: 'absolute', top: 60, left: 16, zIndex: 1000, bgcolor: 'white', p: 1, borderRadius: 1 }}>
           <Typography variant="body2">
@@ -225,7 +315,7 @@ function Map({ nodes, selectedPath, onNodeDelete, onNodeAdd, isLoading }) {
                   [targetNode[0], targetNode[1]]
                 ]}
                 color={getEdgeColor(edge.source, edge.target)}
-                weight={2}
+                weight={getEdgeWeight(edge.source, edge.target)}
                 opacity={0.6}
                 eventHandlers={{
                   click: () => setSelectedEdge(edge)
@@ -236,12 +326,27 @@ function Map({ nodes, selectedPath, onNodeDelete, onNodeAdd, isLoading }) {
           return null;
         })}
 
-        {/* Draw selected path */}
+        {/* Draw Dijkstra's path */}
+        {selectedPath && selectedPath.path && selectedPath.path.length > 1 && (
+          <Polyline
+            positions={selectedPath.path.map(nodeName => {
+              const node = nodes[nodeName];
+              return node ? [node[0], node[1]] : null;
+            }).filter(Boolean)}
+            color="#FFD700"
+            weight={4}
+            opacity={0.8}
+          />
+        )}
+
+        {/* Draw OSRM path */}
         {selectedPath && selectedPath.coordinates && selectedPath.coordinates.length > 1 && (
           <Polyline
             positions={selectedPath.coordinates}
-            color="#ff0000"
-            weight={3}
+            color="#FF4500"
+            weight={4}
+            opacity={0.8}
+            dashArray="5, 10"
           />
         )}
 

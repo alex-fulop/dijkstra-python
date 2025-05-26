@@ -15,6 +15,7 @@
     "end": "End Node",
     "find": "Find Path",
     "avoid": "Nodes to Avoid",
+    "waypoints": "Waypoints",
     "noPathFound": "No valid path found from {start} to {end}{avoidText}",
     "noPathFoundTip": "No valid path found from {start} to {end}{avoidText}"
   },
@@ -22,6 +23,7 @@
     "getStarted": "Get started with travel recommendations",
     "getRecommendations": "Get Travel Recommendations",
     "askQuestion": "Ask about your route...",
+    "calculateRouteFirst": "Please calculate a route first using the \"Shortest Route\" tab",
     "welcomeMessage": "I've found a route for you: {route}\nTotal distance: {distance} km\n\nHere are some recommendations for your journey:",
     "locationInfo": "📍 {location}\n\n🏛️ Top Attractions:\n• {attractions}\n\n🍽️ Recommended Restaurants:\n• {restaurants}\n\n🎉 Events & Festivals:\n{events}\n\n⏰ Best Time to Visit:\n{bestTime}"
   },
@@ -42,8 +44,10 @@
   "map": {
     "deleteNode": "Delete Node",
     "addNode": "Add Node",
-    "edgeCreation": "Shift+Click another node to create an edge from {node}",
     "selectedEdge": "Selected edge: {source} → {target}",
-    "calculatingRoute": "Calculating route..."
+    "calculatingRoute": "Calculating route...",
+    "showAllEdges": "Show All Edges",
+    "routeDensity": "Route Density",
+    "routeDensityDescription": "Adjust how many alternative routes are available between locations. Higher values create more route options but may make the map busier."
   }
 } 

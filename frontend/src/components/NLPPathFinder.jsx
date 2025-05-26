@@ -304,7 +304,7 @@ function NLPPathFinder({ nodes, selectedPath, onPathFound, onLoadingChange }) {
             gap: 2
           }}>
             <Typography variant="h6" align="center" color="text.secondary">
-              {selectedPath ? t('nlpPathFinder.getStarted') : 'Please calculate a route first using the "Shortest Route" tab'}
+              {selectedPath ? t('nlpPathFinder.getStarted') : t('nlpPathFinder.calculateRouteFirst')}
             </Typography>
             <Button
               variant="contained"
@@ -348,7 +348,7 @@ function NLPPathFinder({ nodes, selectedPath, onPathFound, onLoadingChange }) {
           fullWidth
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={selectedPath ? t('nlpPathFinder.askQuestion') : 'Please calculate a route first'}
+          placeholder={selectedPath ? t('nlpPathFinder.askQuestion') : t('nlpPathFinder.calculateRouteFirst')}
           disabled={loading || !selectedPath}
           size="small"
           onKeyPress={(e) => {
