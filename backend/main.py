@@ -15,6 +15,8 @@ import json
 from rapidfuzz import process
 from sqlalchemy.orm import Session
 from database import get_db, Node, Edge
+import logging
+import traceback
 
 # Load environment variables
 load_dotenv()
@@ -44,6 +46,9 @@ genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 # Add at the top with other global variables
 K_VALUE = 3  # Default K value for KNN
+
+# Configure logger
+logger = logging.getLogger(__name__)
 
 
 def initialize_routing_service(db: Session):
@@ -109,6 +114,18 @@ def find_k_nearest_neighbors(
     distances = []
     for existing_node in existing_nodes:
         if existing_node.id != node.id:  # Don't include the node itself
+            # Check if both nodes have coordinates
+            if (
+                node.latitude is None
+                or node.longitude is None
+                or existing_node.latitude is None
+                or existing_node.longitude is None
+            ):
+                print(
+                    f"Skipping edge creation - missing coordinates for {node.name} or {existing_node.name}"
+                )
+                continue
+
             distance = dijkstra.calculate_distance(
                 node.latitude,
                 node.longitude,
@@ -336,22 +353,52 @@ async def export_data(db: Session = Depends(get_db)):
 @app.post("/path/")
 async def find_path(request: PathRequest):
     try:
-        print(f"Finding path from {request.start} to {request.end}")
-        print(f"Waypoints: {request.waypoints}")
-        print(f"Avoid: {request.avoid}")
+        logger.info(f"Finding path from {request.start} to {request.end}")
+        logger.info(f"Waypoints: {request.waypoints}")
+        logger.info(f"Avoid: {request.avoid}")
+
+        # Check if nodes exist in the graph
+        if request.start not in dijkstra.graph:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Start node '{request.start}' not found in the graph",
+            )
+        if request.end not in dijkstra.graph:
+            raise HTTPException(
+                status_code=400,
+                detail=f"End node '{request.end}' not found in the graph",
+            )
+        if request.waypoints:
+            for wp in request.waypoints:
+                if wp not in dijkstra.graph:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Waypoint '{wp}' not found in the graph",
+                    )
+        if request.avoid:
+            for node in request.avoid:
+                if node not in dijkstra.graph:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Avoid node '{node}' not found in the graph",
+                    )
 
         route = routing_service.find_route(
             request.start, request.end, request.waypoints, request.avoid
         )
-        return route
-    except ValueError as e:
-        print(f"ValueError in find_path: {str(e)}")
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        print(f"Unexpected error in find_path: {str(e)}")
-        import traceback
 
-        print(f"Traceback: {traceback.format_exc()}")
+        if not route:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No valid path found from {request.start} to {request.end}",
+            )
+
+        return route
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Unexpected error in find_path: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -359,6 +406,7 @@ async def find_path(request: PathRequest):
 async def nlp_path_query(query: dict = Body(...), db: Session = Depends(get_db)):
     user_query = query.get("query")
     current_route = query.get("current_route")
+    language = query.get("language", "en")  # Default to English if not specified
 
     if not user_query:
         raise HTTPException(status_code=400, detail="No query provided.")
@@ -373,35 +421,64 @@ async def nlp_path_query(query: dict = Body(...), db: Session = Depends(get_db))
 
         if current_route:
             # Handle follow-up questions about the current route
-            prompt = (
-                f"Current route: {current_route['path']}\n"
-                f"Total distance: {current_route['distance']} km\n\n"
-                f"User question: {user_query}\n\n"
-                "Provide a helpful response about the route, focusing on:\n"
-                "- Tourist attractions and activities\n"
-                "- Local cuisine and restaurants\n"
-                "- Cultural events and festivals\n"
-                "- Travel tips and recommendations\n"
-                "Make the response conversational and engaging."
-            )
+            if language == "ro":
+                prompt = (
+                    f"Ruta curentă: {current_route['path']}\n"
+                    f"Distanța totală: {current_route['distance']} km\n\n"
+                    f"Întrebarea utilizatorului: {user_query}\n\n"
+                    "Oferă un răspuns util despre rută, concentrându-te pe:\n"
+                    "- Atracții turistice și activități\n"
+                    "- Bucătărie locală și restaurante\n"
+                    "- Evenimente culturale și festivaluri\n"
+                    "- Sfaturi și recomandări de călătorie\n"
+                    "Fă răspunsul conversațional și captivant."
+                )
+            else:
+                prompt = (
+                    f"Current route: {current_route['path']}\n"
+                    f"Total distance: {current_route['distance']} km\n\n"
+                    f"User question: {user_query}\n\n"
+                    "Provide a helpful response about the route, focusing on:\n"
+                    "- Tourist attractions and activities\n"
+                    "- Local cuisine and restaurants\n"
+                    "- Cultural events and festivals\n"
+                    "- Travel tips and recommendations\n"
+                    "Make the response conversational and engaging."
+                )
             response = model.generate_content(prompt)
             return {"response": response.text.strip()}
         else:
             # Initial route calculation
-            prompt = (
-                f"Available locations: {node_list_str}\n\n"
-                "The user wants travel recommendations. If they haven't specified a route, ask them to provide a starting point and destination from the available locations.\n"
-                "If they have specified a route, extract the following:\n"
-                "- start: the starting city (must be from the available locations)\n"
-                "- end: the destination city (must be from the available locations)\n"
-                "- waypoints: a list of cities or regions to pass through or stop at (must be from the available locations, can be empty)\n"
-                "- avoid: a list of cities or regions to avoid (must be from the available locations, can be empty)\n"
-                "- preferences: a list of route preferences (e.g., 'scenic', 'fastest', 'avoid highways', etc.)\n\n"
-                "If no route is specified, respond with a JSON containing only a 'message' key with a friendly prompt asking for a route.\n"
-                "If a route is specified, respond with a JSON containing: start, end, waypoints, avoid, preferences.\n"
-                "Only use the available locations for start, end, waypoints, and avoid.\n\n"
-                f'Query: "{user_query}"'
-            )
+            if language == "ro":
+                prompt = (
+                    f"Locații disponibile: {node_list_str}\n\n"
+                    "Utilizatorul dorește recomandări de călătorie. Dacă nu a specificat o rută, întreabă-l să furnizeze un punct de plecare și o destinație din locațiile disponibile.\n"
+                    "Dacă a specificat o rută, extrage următoarele:\n"
+                    "- start: orașul de plecare (trebuie să fie din locațiile disponibile)\n"
+                    "- end: orașul destinație (trebuie să fie din locațiile disponibile)\n"
+                    "- waypoints: o listă de orașe sau regiuni prin care să treacă sau să se oprească (trebuie să fie din locațiile disponibile, poate fi goală)\n"
+                    "- avoid: o listă de orașe sau regiuni de evitat (trebuie să fie din locațiile disponibile, poate fi goală)\n"
+                    "- preferences: o listă de preferințe de rută (ex: 'picturesque', 'cea mai rapidă', 'evită autostrăzile', etc.)\n\n"
+                    "Dacă nu este specificată nicio rută, răspunde cu un JSON conținând doar o cheie 'message' cu un prompt prietenos cerând o rută.\n"
+                    "Dacă este specificată o rută, răspunde cu un JSON conținând: start, end, waypoints, avoid, preferences.\n"
+                    "Folosește doar locațiile disponibile pentru start, end, waypoints și avoid.\n\n"
+                    f'Query: "{user_query}"'
+                )
+            else:
+                prompt = (
+                    f"Available locations: {node_list_str}\n\n"
+                    "The user wants travel recommendations. If they haven't specified a route, ask them to provide a starting point and destination from the available locations.\n"
+                    "If they have specified a route, extract the following:\n"
+                    "- start: the starting city (must be from the available locations)\n"
+                    "- end: the destination city (must be from the available locations)\n"
+                    "- waypoints: a list of cities or regions to pass through or stop at (must be from the available locations, can be empty)\n"
+                    "- avoid: a list of cities or regions to avoid (must be from the available locations, can be empty)\n"
+                    "- preferences: a list of route preferences (e.g., 'scenic', 'fastest', 'avoid highways', etc.)\n\n"
+                    "If no route is specified, respond with a JSON containing only a 'message' key with a friendly prompt asking for a route.\n"
+                    "If a route is specified, respond with a JSON containing: start, end, waypoints, avoid, preferences.\n"
+                    "Only use the available locations for start, end, waypoints, and avoid.\n\n"
+                    f'Query: "{user_query}"'
+                )
             response = model.generate_content(prompt)
             content = response.text.strip()
             json_str = extract_json_from_text(content)
@@ -411,12 +488,21 @@ async def nlp_path_query(query: dict = Body(...), db: Session = Depends(get_db))
 
             # If no route was specified, return a friendly message
             if "message" in parsed:
+                msg = parsed["message"]
+                if "{route}" in msg or "{distance}" in msg:
+                    route_str = ""
+                    distance_val = 0
+                    if current_route:
+                        route_str = " → ".join(current_route.get("path", []))
+                        distance_val = current_route.get("distance", 0)
+                    msg = msg.replace("{route}", route_str)
+                    msg = msg.replace("{distance}", f"{distance_val:.2f}")
                 return {
                     "path": [],
                     "distance": 0,
                     "preferences": [],
                     "tourist_info": {},
-                    "message": parsed["message"],
+                    "message": msg,
                 }
 
             # Validate locations
@@ -459,7 +545,10 @@ async def nlp_path_query(query: dict = Body(...), db: Session = Depends(get_db))
             # Get tourist information for each node in the path
             tourist_info = {}
             for node in path:
-                prompt = f"Provide tourist information for {node} including:\n- Top 3 attractions to visit\n- 2 recommended restaurants\n- Any special events or festivals\n- Best time to visit\nFormat the response as a JSON with these keys: attractions, restaurants, events, best_time"
+                if language == "ro":
+                    prompt = f"Oferă informații turistice pentru {node} incluzând:\n- Top 3 atracții de vizitat\n- 2 restaurante recomandate\n- Orice evenimente sau festivaluri speciale\n- Cel mai bun moment de vizitat\nFormatează răspunsul ca un JSON cu aceste chei: attractions, restaurants, events, best_time"
+                else:
+                    prompt = f"Provide tourist information for {node} including:\n- Top 3 attractions to visit\n- 2 recommended restaurants\n- Any special events or festivals\n- Best time to visit\nFormat the response as a JSON with these keys: attractions, restaurants, events, best_time"
                 response = model.generate_content(prompt)
                 content = response.text.strip()
                 json_str = extract_json_from_text(content)
@@ -480,6 +569,8 @@ async def nlp_path_query(query: dict = Body(...), db: Session = Depends(get_db))
 async def get_tourist_info(route: dict = Body(...)):
     """Get tourist information for a list of locations"""
     locations = route.get("locations", [])
+    language = route.get("language", "en")  # Default to English if not specified
+
     if not locations:
         raise HTTPException(status_code=400, detail="No locations provided.")
 
@@ -488,7 +579,10 @@ async def get_tourist_info(route: dict = Body(...)):
         tourist_info = {}
 
         for location in locations:
-            prompt = f"Provide tourist information for {location} including:\n- Top 3 attractions to visit\n- 2 recommended restaurants\n- Any special events or festivals\n- Best time to visit\nFormat the response as a JSON with these keys: attractions, restaurants, events, best_time"
+            if language == "ro":
+                prompt = f"Oferă informații turistice pentru {location} incluzând:\n- Top 3 atracții de vizitat\n- 2 restaurante recomandate\n- Orice evenimente sau festivaluri speciale\n- Cel mai bun moment de vizitat\nFormatează răspunsul ca un JSON cu aceste chei: attractions, restaurants, events, best_time"
+            else:
+                prompt = f"Provide tourist information for {location} including:\n- Top 3 attractions to visit\n- 2 recommended restaurants\n- Any special events or festivals\n- Best time to visit\nFormat the response as a JSON with these keys: attractions, restaurants, events, best_time"
             response = model.generate_content(prompt)
             content = response.text.strip()
             json_str = extract_json_from_text(content)
@@ -656,3 +750,23 @@ async def update_k_value(k_update: KValueUpdate, db: Session = Depends(get_db)):
 async def get_k_value():
     """Get the current K value"""
     return {"k": K_VALUE}
+
+
+@app.post("/snap-to-road/")
+async def snap_to_road(coordinates: dict = Body(...)):
+    """Snap coordinates to the nearest road point using OSRM"""
+    try:
+        lat = coordinates.get("latitude")
+        lon = coordinates.get("longitude")
+
+        if lat is None or lon is None:
+            raise HTTPException(
+                status_code=400, detail="Latitude and longitude are required"
+            )
+
+        snapped_lat, snapped_lon = routing_service.osrm.find_nearest_road_point(
+            lat, lon
+        )
+        return {"latitude": snapped_lat, "longitude": snapped_lon}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

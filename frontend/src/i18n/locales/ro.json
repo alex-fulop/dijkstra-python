@@ -17,7 +17,8 @@
     "error": "Nu s-a putut calcula ruta. Vă rugăm să încercați alte noduri.",
     "noPathFound": "Nu s-a găsit o rută validă de la {start} la {end}{avoidText}",
     "noPathFoundTip": "Nu s-a găsit o rută validă de la {start} la {end}{avoidText}",
-    "avoiding": " evitând {nodes}"
+    "avoiding": " evitând {nodes}",
+    "delete": "Șterge Ruta"
   },
   "routeInfo": {
     "title": "Informații Rută",

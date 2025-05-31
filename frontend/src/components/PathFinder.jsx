@@ -1,34 +1,33 @@
 import { useState, useEffect } from 'react';
-import { TextField, Button, Box, Typography, Autocomplete, CircularProgress } from '@mui/material';
+import { TextField, Button, Box, Typography, Autocomplete, CircularProgress, ButtonGroup } from '@mui/material';
+import ClearIcon from '@mui/icons-material/Clear';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 
-function PathFinder({ nodes, onPathFound, onError, onLoadingChange }) {
+function PathFinder({ nodes, onPathFound, onError, onLoadingChange, formState, onFormStateChange }) {
   const { t } = useTranslation();
-  const [start, setStart] = useState('');
-  const [end, setEnd] = useState('');
-  const [waypoints, setWaypoints] = useState([]);
-  const [avoid, setAvoid] = useState([]);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
 
   // Reset selections if nodes are deleted
   useEffect(() => {
-    if (!nodes.includes(start)) {
-      setStart('');
+    if (!nodes.includes(formState.start)) {
+      onFormStateChange(prev => ({ ...prev, start: '' }));
       setResult(null);
       onPathFound(null);
     }
-    if (!nodes.includes(end)) {
-      setEnd('');
+    if (!nodes.includes(formState.end)) {
+      onFormStateChange(prev => ({ ...prev, end: '' }));
       setResult(null);
       onPathFound(null);
     }
     // Remove any avoided nodes that no longer exist
-    setAvoid(avoid.filter(node => nodes.includes(node)));
-    // Remove any waypoints that no longer exist
-    setWaypoints(waypoints.filter(node => nodes.includes(node)));
-  }, [nodes, start, end, onPathFound, avoid, waypoints]);
+    onFormStateChange(prev => ({
+      ...prev,
+      avoid: prev.avoid.filter(node => nodes.includes(node)),
+      waypoints: prev.waypoints.filter(node => nodes.includes(node))
+    }));
+  }, [nodes, formState.start, formState.end, onPathFound, formState.avoid, formState.waypoints, onFormStateChange]);
 
   const formatDuration = (seconds) => {
     const hours = Math.floor(seconds / 3600);
@@ -42,10 +41,10 @@ function PathFinder({ nodes, onPathFound, onError, onLoadingChange }) {
     onLoadingChange(true);
     try {
       const response = await axios.post('http://localhost:8000/path/', {
-        start,
-        end,
-        waypoints: waypoints.length > 0 ? waypoints : undefined,
-        avoid: avoid.length > 0 ? avoid : undefined
+        start: formState.start,
+        end: formState.end,
+        waypoints: formState.waypoints.length > 0 ? formState.waypoints : undefined,
+        avoid: formState.avoid.length > 0 ? formState.avoid : undefined
       });
       
       const { path, distance, duration, route_info, node_sequence } = response.data;
@@ -62,13 +61,23 @@ function PathFinder({ nodes, onPathFound, onError, onLoadingChange }) {
       console.error('Error finding path:', error);
       
       if (error.response?.status === 404) {
-        onError(t('pathFinder.noPathFound', { 
-          start, 
-          end, 
-          avoidText: avoid.length > 0 ? t('pathFinder.avoiding', { nodes: avoid.join(', ') }) : ''
-        }));
+        const avoidingText = formState.avoid.length > 0 
+          ? t('pathFinder.avoiding').replace('{nodes}', formState.avoid.join(', '))
+          : '';
+          
+        const errorMessage = t('pathFinder.noPathFound')
+          .replace('{start}', formState.start)
+          .replace('{end}', formState.end)
+          .replace('{avoidText}', avoidingText);
+          
+        onError(errorMessage);
+      } else if (error.response?.status === 400) {
+        // Handle validation errors (missing nodes, etc.)
+        onError(t('pathFinder.error').replace('{detail}', error.response.data.detail));
       } else {
-        onError(t('pathFinder.error'));
+        // Handle other errors (500, network errors, etc.)
+        const errorMessage = error.response?.data?.detail || t('pathFinder.error').replace('{detail}', 'An unexpected error occurred');
+        onError(t('pathFinder.error').replace('{detail}', errorMessage));
       }
       
       setResult(null);
@@ -83,8 +92,8 @@ function PathFinder({ nodes, onPathFound, onError, onLoadingChange }) {
     <Box>
       <Box component="form" onSubmit={handleSubmit}>
         <Autocomplete
-          value={start}
-          onChange={(_, newValue) => setStart(newValue)}
+          value={formState.start}
+          onChange={(_, newValue) => onFormStateChange(prev => ({ ...prev, start: newValue }))}
           options={nodes}
           renderInput={(params) => (
             <TextField
@@ -96,8 +105,8 @@ function PathFinder({ nodes, onPathFound, onError, onLoadingChange }) {
           )}
         />
         <Autocomplete
-          value={end}
-          onChange={(_, newValue) => setEnd(newValue)}
+          value={formState.end}
+          onChange={(_, newValue) => onFormStateChange(prev => ({ ...prev, end: newValue }))}
           options={nodes}
           renderInput={(params) => (
             <TextField
@@ -110,9 +119,10 @@ function PathFinder({ nodes, onPathFound, onError, onLoadingChange }) {
         />
         <Autocomplete
           multiple
-          options={nodes.filter(node => node !== start && node !== end && !avoid.includes(node))}
-          value={waypoints}
-          onChange={(_, newValue) => setWaypoints(newValue)}
+          freeSolo
+          options={nodes.filter(node => node !== formState.start && node !== formState.end && !formState.avoid.includes(node))}
+          value={formState.waypoints}
+          onChange={(_, newValue) => onFormStateChange(prev => ({ ...prev, waypoints: newValue }))}
           renderInput={(params) => (
             <TextField
               {...params}
@@ -124,9 +134,10 @@ function PathFinder({ nodes, onPathFound, onError, onLoadingChange }) {
         />
         <Autocomplete
           multiple
-          options={nodes.filter(node => node !== start && node !== end && !waypoints.includes(node))}
-          value={avoid}
-          onChange={(_, newValue) => setAvoid(newValue)}
+          freeSolo
+          options={nodes.filter(node => node !== formState.start && node !== formState.end && !formState.waypoints.includes(node))}
+          value={formState.avoid}
+          onChange={(_, newValue) => onFormStateChange(prev => ({ ...prev, avoid: newValue }))}
           renderInput={(params) => (
             <TextField
               {...params}
@@ -136,15 +147,35 @@ function PathFinder({ nodes, onPathFound, onError, onLoadingChange }) {
             />
           )}
         />
-        <Button 
-          type="submit" 
-          variant="contained" 
-          fullWidth
-          disabled={!start || !end || loading}
-          sx={{ mt: 2 }}
-        >
-          {loading ? <CircularProgress size={24} /> : t('pathFinder.find')}
-        </Button>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+          <Button 
+            type="submit" 
+            variant="contained" 
+            disabled={!formState.start || !formState.end || loading}
+            fullWidth
+          >
+            {loading ? <CircularProgress size={24} /> : t('pathFinder.find')}
+          </Button>
+          <Button
+            variant="outlined"
+            color="error"
+            onClick={() => {
+              onFormStateChange({
+                start: '',
+                end: '',
+                waypoints: [],
+                avoid: []
+              });
+              setResult(null);
+              onPathFound(null);
+            }}
+            disabled={!formState.start && !formState.end && formState.waypoints.length === 0 && formState.avoid.length === 0}
+            fullWidth
+          >
+            <ClearIcon sx={{ mr: 1 }} />
+            {t('pathFinder.delete')}
+          </Button>
+        </Box>
       </Box>
       
       {result && (

@@ -15,7 +15,11 @@
     "end": "Nod de Destinație",
     "find": "Găsește Ruta",
     "avoid": "Noduri de Evitat",
-    "waypoints": "Puncte Intermediare"
+    "waypoints": "Puncte Intermediare",
+    "delete": "Șterge Ruta",
+    "error": "Eroare: {detail}",
+    "noPathFound": "Nu s-a găsit o rută validă de la {start} la {end}{avoidText}",
+    "avoiding": " evitând {nodes}"
   },
   "nlpPathFinder": {
     "getStarted": "Începe cu recomandări de călătorie",
@@ -23,7 +27,10 @@
     "askQuestion": "Întreabă despre ruta ta...",
     "calculateRouteFirst": "Vă rugăm să calculați mai întâi o rută folosind tab-ul \"Rută Cea Mai Scurtă\"",
     "welcomeMessage": "Am găsit o rută pentru tine: {route}\nDistanța totală: {distance} km\n\nIată câteva recomandări pentru călătoria ta:",
-    "locationInfo": "📍 {location}\n\n🏛️ Atracții Principale:\n• {attractions}\n\n🍽️ Restaurante Recomandate:\n• {restaurants}\n\n🎉 Evenimente și Festivaluri:\n{events}\n\n⏰ Cel Mai Bun Moment de Vizitat:\n{bestTime}"
+    "locationInfo": "📍 {location}\n\n🏛️ Atracții Principale:\n• {attractions}\n\n🍽️ Restaurante Recomandate:\n• {restaurants}\n\n🎉 Evenimente și Festivaluri:\n{events}\n\n⏰ Cel Mai Bun Moment de Vizitat:\n{bestTime}",
+    "initialMessage": "Văd că ai calculat o rută: {route}\nDistanța totală: {distance} km\n\nPoți să mă întrebi despre:\n* Locuri interesante de vizitat de-a lungul rutei tale\n* Atracții locale și locuri ascunse\n* Recomandări de restaurante\n* Cele mai bune momente pentru a vizita fiecare locație\n* Sau orice alte sfaturi de călătorie ai dori să știi!",
+    "errorGettingRecommendations": "Eroare la obținerea recomandărilor",
+    "errorProcessingRequest": "Eroare la procesarea cererii tale"
   },
   "dataManager": {
     "import": "Importă Date",
@@ -46,6 +53,9 @@
     "calculatingRoute": "Se calculează ruta...",
     "showAllEdges": "Arată Toate Muchiile",
     "routeDensity": "Densitatea Rutelor",
-    "routeDensityDescription": "Ajustați câte rute alternative sunt disponibile între locații. Valorile mai mari creează mai multe opțiuni de rută, dar pot face harta mai aglomerată."
+    "routeDensityDescription": "Ajustați câte rute alternative sunt disponibile între locații. Valorile mai mari creează mai multe opțiuni de rută, dar pot face harta mai aglomerată.",
+    "removeAllNodes": "Șterge Toate Nodurile",
+    "confirmRemoveAll": "Sigur doriți să ștergeți toate nodurile? Această acțiune nu poate fi anulată.",
+    "errorRemovingAll": "Eroare la ștergerea nodurilor. Vă rugăm să încercați din nou."
   }
 } 

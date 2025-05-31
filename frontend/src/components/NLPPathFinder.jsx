@@ -62,7 +62,7 @@ function TypingIndicator() {
 }
 
 function NLPPathFinder({ nodes, selectedPath, onPathFound, onLoadingChange }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -80,20 +80,27 @@ function NLPPathFinder({ nodes, selectedPath, onPathFound, onLoadingChange }) {
   useEffect(() => {
     if (selectedPath && selectedPath.path && selectedPath.distance) {
       const { path, distance } = selectedPath;
+      const routeString = Array.isArray(path) ? path.join(' → ') : path;
+      const distanceString = Number(distance).toFixed(2);
+      
+      const message = t('nlpPathFinder.initialMessage')
+        .replace('{route}', routeString)
+        .replace('{distance}', distanceString);
+      
       setMessages([
         {
           type: 'assistant',
-          content: `I see you've calculated a route: ${path.join(' → ')}\nTotal distance: ${distance.toFixed(2)} km\n\nFeel free to ask me about:\n* Cool places to visit along your route\n* Local attractions and hidden gems\n* Restaurant recommendations\n* Best times to visit each location\n* Or any other travel tips you'd like to know!`
+          content: message
         }
       ]);
     }
-  }, [selectedPath]);
+  }, [selectedPath, t]);
 
   const handleGetRecommendations = async () => {
     if (!selectedPath) {
       setMessages([{
         type: 'assistant',
-        content: 'Please calculate a route first using the "Shortest Route" tab. Once you have a route, I can provide personalized travel recommendations for your journey.'
+        content: t('nlpPathFinder.calculateRouteFirst')
       }]);
       return;
     }
@@ -103,7 +110,7 @@ function NLPPathFinder({ nodes, selectedPath, onPathFound, onLoadingChange }) {
     
     try {
       const response = await axios.post('http://localhost:8000/nlp-path/', { 
-        query: "Give me travel recommendations for my route",
+        query: t('nlpPathFinder.getRecommendations'),
         current_route: selectedPath
       });
       
@@ -112,19 +119,19 @@ function NLPPathFinder({ nodes, selectedPath, onPathFound, onLoadingChange }) {
       if (!path || path.length === 0 || !distance) {
         setMessages([{
           type: 'assistant',
-          content: message || 'Please calculate a route first using the "Shortest Route" tab. Once you have a route, I can provide personalized travel recommendations for your journey.'
+          content: message || t('nlpPathFinder.calculateRouteFirst')
         }]);
         return;
       }
       
       onPathFound({ path, distance, tourist_info }, {
-        text: `Route: ${path.join(' → ')}`,
+        text: t('routeInfo.title') + ': ' + path.join(' → '),
         distance: distance
       });
     } catch (error) {
       setMessages([{
         type: 'assistant',
-        content: error.response?.data?.detail || 'Error getting recommendations'
+        content: error.response?.data?.detail || t('nlpPathFinder.errorGettingRecommendations')
       }]);
     }
     setLoading(false);
@@ -137,7 +144,7 @@ function NLPPathFinder({ nodes, selectedPath, onPathFound, onLoadingChange }) {
     if (!selectedPath) {
       setMessages([{
         type: 'assistant',
-        content: 'Please calculate a route first using the "Shortest Route" tab. Once you have a route, I can provide personalized travel recommendations for your journey.'
+        content: t('nlpPathFinder.calculateRouteFirst')
       }]);
       return;
     }
@@ -151,7 +158,8 @@ function NLPPathFinder({ nodes, selectedPath, onPathFound, onLoadingChange }) {
     try {
       const response = await axios.post('http://localhost:8000/nlp-path/', {
         query: userMessage,
-        current_route: selectedPath
+        current_route: selectedPath,
+        language: i18n.language
       });
 
       const { path, distance, tourist_info, response: aiResponse } = response.data;
@@ -159,19 +167,19 @@ function NLPPathFinder({ nodes, selectedPath, onPathFound, onLoadingChange }) {
       // If we got a new route, update it
       if (path && path.length > 0 && distance) {
         onPathFound({ path, distance, tourist_info }, {
-          text: `Route: ${path.join(' → ')}`,
+          text: t('routeInfo.title') + ': ' + path.join(' → '),
           distance: distance
         });
       }
 
       setMessages(prev => prev.filter(msg => msg.type !== 'typing').concat({
         type: 'assistant',
-        content: aiResponse || response.data.message || 'I understand your request.'
+        content: aiResponse || response.data.message || t('nlpPathFinder.errorProcessingRequest')
       }));
     } catch (error) {
       setMessages(prev => prev.filter(msg => msg.type !== 'typing').concat({
         type: 'assistant',
-        content: error.response?.data?.detail || 'Error processing your request'
+        content: error.response?.data?.detail || t('nlpPathFinder.errorProcessingRequest')
       }));
     }
     setLoading(false);

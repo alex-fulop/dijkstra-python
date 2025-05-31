@@ -17,7 +17,8 @@
     "error": "Could not calculate path. Please try different nodes.",
     "noPathFound": "No valid path found from {start} to {end}{avoidText}",
     "noPathFoundTip": "No valid path found from {start} to {end}{avoidText}",
-    "avoiding": " while avoiding {nodes}"
+    "avoiding": " while avoiding {nodes}",
+    "delete": "Delete Path"
   },
   "routeInfo": {
     "title": "Route Information",

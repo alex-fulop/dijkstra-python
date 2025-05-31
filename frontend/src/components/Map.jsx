@@ -130,20 +130,43 @@ function Map({ nodes, selectedPath, onNodeDelete, onNodeAdd, isLoading }) {
     }
   };
 
-  const handleMapClick = (latlng) => {
-    setClickedPosition(latlng);
-    setNewNodeName('');
+  const handleMapClick = async (latlng) => {
+    try {
+      // Snap coordinates to nearest road
+      const response = await axios.post('http://localhost:8000/snap-to-road/', {
+        latitude: latlng.lat,
+        longitude: latlng.lng
+      });
+      
+      // Update clicked position with snapped coordinates
+      setClickedPosition({
+        lat: response.data.latitude,
+        lng: response.data.longitude
+      });
+      setNewNodeName('');
+    } catch (error) {
+      console.error('Error snapping to road:', error);
+      // Fallback to original coordinates if snapping fails
+      setClickedPosition(latlng);
+      setNewNodeName('');
+    }
   };
 
   const handleAddNode = async () => {
     if (!newNodeName.trim()) return;
     
     try {
-      // First add the node
-      const response = await axios.post('http://localhost:8000/nodes/', {
-        name: newNodeName,
+      // First snap the coordinates to the nearest road
+      const snapResponse = await axios.post('http://localhost:8000/snap-to-road/', {
         latitude: clickedPosition.lat,
         longitude: clickedPosition.lng
+      });
+
+      // Then add the node with snapped coordinates
+      const response = await axios.post('http://localhost:8000/nodes/', {
+        name: newNodeName,
+        latitude: snapResponse.data.latitude,
+        longitude: snapResponse.data.longitude
       });
 
       // Wait a bit to ensure the node is properly initialized
@@ -172,7 +195,7 @@ function Map({ nodes, selectedPath, onNodeDelete, onNodeAdd, isLoading }) {
 
   const getEdgeColor = (source, target) => {
     // Check if this edge is part of the selected path
-    if (selectedPath && selectedPath.path) {
+    if (selectedPath && selectedPath.path && selectedPath.path.length > 0) {
       const sourceIndex = selectedPath.path.indexOf(source);
       const targetIndex = selectedPath.path.indexOf(target);
       // Only highlight if both nodes are in the path and they are consecutive
@@ -207,6 +230,31 @@ function Map({ nodes, selectedPath, onNodeDelete, onNodeAdd, isLoading }) {
   const handleKValueChange = (event, newValue) => {
     console.log('Slider value changed:', newValue);
     setKValue(newValue);
+  };
+
+  const handleRemoveAllNodes = async () => {
+    if (!window.confirm(t('map.confirmRemoveAll'))) {
+      return;
+    }
+
+    try {
+      // Get all node names
+      const nodeNames = Object.keys(nodes);
+      
+      // Delete each node
+      for (const nodeName of nodeNames) {
+        await axios.delete(`http://localhost:8000/nodes/${nodeName}`);
+      }
+
+      // Refresh the nodes list
+      onNodeAdd();
+      
+      // Clear edges
+      setAllEdges([]);
+    } catch (error) {
+      console.error('Error removing all nodes:', error);
+      alert(t('map.errorRemovingAll'));
+    }
   };
 
   return (
@@ -277,6 +325,18 @@ function Map({ nodes, selectedPath, onNodeDelete, onNodeAdd, isLoading }) {
             {t('map.routeDensityDescription')}
           </Typography>
         </Box>
+
+        <Box sx={{ mt: 2 }}>
+          <Button
+            variant="outlined"
+            color="error"
+            onClick={handleRemoveAllNodes}
+            fullWidth
+            startIcon={<DeleteIcon />}
+          >
+            {t('map.removeAllNodes')}
+          </Button>
+        </Box>
       </Box>
       {selectedEdge && (
         <Box sx={{ position: 'absolute', top: 60, left: 16, zIndex: 1000, bgcolor: 'white', p: 1, borderRadius: 1 }}>
@@ -327,7 +387,7 @@ function Map({ nodes, selectedPath, onNodeDelete, onNodeAdd, isLoading }) {
         })}
 
         {/* Draw Dijkstra's path */}
-        {selectedPath && selectedPath.path && selectedPath.path.length > 1 && (
+        {selectedPath && selectedPath.path && selectedPath.path.length > 1 && selectedPath.path.every(node => nodes[node]) && (
           <Polyline
             positions={selectedPath.path.map(nodeName => {
               const node = nodes[nodeName];

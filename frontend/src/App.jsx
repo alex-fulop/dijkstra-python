@@ -10,6 +10,7 @@ import DataManager from './components/DataManager';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import './i18n';
+import ClearIcon from '@mui/icons-material/Clear';
 
 function App() {
   const { t, i18n } = useTranslation();
@@ -20,6 +21,14 @@ function App() {
   const [tab, setTab] = useState(0);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Add form state
+  const [pathFormState, setPathFormState] = useState({
+    start: '',
+    end: '',
+    waypoints: [],
+    avoid: []
+  });
 
   // Fetch nodes when the app starts
   useEffect(() => {
@@ -76,6 +85,17 @@ function App() {
     if (info) {
       setNlpInfo(info);
     }
+  };
+
+  const handleClearPath = () => {
+    setSelectedPath(null);
+    setNlpInfo(null);
+    setPathFormState({
+      start: '',
+      end: '',
+      waypoints: [],
+      avoid: []
+    });
   };
 
   //TODO: ADD MORE NODES FOR THE ROUTE (5 de ex)
@@ -160,6 +180,8 @@ function App() {
                       onPathFound={handlePathFound}
                       onError={setError}
                       onLoadingChange={setIsLoading}
+                      formState={pathFormState}
+                      onFormStateChange={setPathFormState}
                     />
                   </Paper>
                   <Paper sx={{ p: 2 }}>
@@ -235,6 +257,27 @@ function App() {
           position: 'relative',
         }}
       >
+        {/* Clear Path Button */}
+        {selectedPath && (
+          <IconButton
+            onClick={handleClearPath}
+            sx={{
+              position: 'absolute',
+              top: 16,
+              right: 16,
+              zIndex: 1300,
+              bgcolor: 'background.paper',
+              boxShadow: 1,
+              '&:hover': {
+                bgcolor: 'error.light',
+                color: 'white'
+              }
+            }}
+          >
+            <ClearIcon />
+          </IconButton>
+        )}
+
         <Map 
           nodes={nodes} 
           selectedPath={selectedPath} 

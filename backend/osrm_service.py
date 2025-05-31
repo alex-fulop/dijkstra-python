@@ -72,68 +72,73 @@ class OSRMService:
             self.find_nearest_road_point(lat, lon) for lat, lon in coordinates
         ]
 
-        # Format coordinates for OSRM API (OSRM expects [lon, lat] format)
-        # We'll use all coordinates as waypoints to ensure we follow our graph structure
-        coords_str = ";".join([f"{lon},{lat}" for lat, lon in snapped_coordinates])
+        # Initialize variables to store the complete route
+        complete_path = []
+        total_distance = 0
+        total_duration = 0
+        route_info = []
 
-        # Make request to OSRM
-        url = f"{self.base_url}/driving/{coords_str}"
-        params = {
-            "overview": "full",  # Get full route geometry
-            "geometries": "polyline",  # Use polyline encoding for efficiency
-            "alternatives": "false",  # Don't get alternative routes
-            "continue_straight": "false",  # Allow the route to make turns at waypoints
-            "steps": "true",  # Get detailed steps to ensure we follow the waypoints
-            "annotations": "true",  # Get additional annotations including street names
-            "waypoints": ";".join(
-                [str(i) for i in range(len(snapped_coordinates))]
-            ),  # Force OSRM to use all points as waypoints
-        }
+        # Process each consecutive pair of coordinates
+        for i in range(len(snapped_coordinates) - 1):
+            start = snapped_coordinates[i]
+            end = snapped_coordinates[i + 1]
 
-        try:
-            response = requests.get(url, params=params)
-            response.raise_for_status()
-            data = response.json()
+            # Format coordinates for OSRM API (OSRM expects [lon, lat] format)
+            coords_str = f"{start[1]},{start[0]};{end[1]},{end[0]}"
 
-            if data["code"] != "Ok":
-                raise Exception(f"OSRM API error: {data['message']}")
-
-            route = data["routes"][0]
-
-            # Decode the polyline to get the actual coordinates
-            path_coordinates = polyline.decode(route["geometry"])
-
-            # Convert to (lat, lon) format
-            path = [(lat, lon) for lat, lon in path_coordinates]
-
-            # Extract route information from steps
-            route_info = []
-            for leg in route["legs"]:
-                for step in leg["steps"]:
-                    if "name" in step and step["name"]:
-                        street_name = step["name"]
-                        if street_name != "unnamed road":
-                            route_info.append(street_name)
-
-            # Calculate the actual distance between graph nodes
-            total_graph_distance = 0
-            for i in range(len(coordinates) - 1):
-                total_graph_distance += self.calculate_distance(
-                    coordinates[i][0],
-                    coordinates[i][1],
-                    coordinates[i + 1][0],
-                    coordinates[i + 1][1],
-                )
-
-            return {
-                "path": path,
-                "distance": total_graph_distance,  # Use the actual graph distance
-                "duration": route["duration"],  # Duration in seconds
-                "route_info": route_info,  # List of street names
-                "waypoints": snapped_coordinates,  # Include the snapped waypoints
+            # Make request to OSRM
+            url = f"{self.base_url}/driving/{coords_str}"
+            params = {
+                "overview": "full",  # Get full route geometry
+                "geometries": "polyline",  # Use polyline encoding for efficiency
+                "alternatives": "false",  # Don't get alternative routes
+                "continue_straight": "false",  # Allow the route to make turns at waypoints
+                "steps": "true",  # Get detailed steps to ensure we follow the waypoints
+                "annotations": "true",  # Get additional annotations including street names
             }
 
-        except requests.exceptions.RequestException as e:
-            raise Exception(f"Error calling OSRM API: {str(e)}")
-        except Exception as e:
-            raise Exception(f"Error processing OSRM response: {str(e)}")
+            try:
+                response = requests.get(url, params=params)
+                response.raise_for_status()
+                data = response.json()
+
+                if data["code"] != "Ok":
+                    raise Exception(f"OSRM API error: {data['message']}")
+
+                route = data["routes"][0]
+
+                # Decode the polyline to get the actual coordinates
+                segment_coordinates = polyline.decode(route["geometry"])
+
+                # Convert to (lat, lon) format and add to complete path
+                # Skip the first point if it's not the first segment to avoid duplicates
+                if i > 0:
+                    segment_coordinates = segment_coordinates[1:]
+                complete_path.extend([(lat, lon) for lat, lon in segment_coordinates])
+
+                # Add to total distance and duration
+                total_distance += (
+                    route["distance"] / 1000
+                )  # Convert meters to kilometers
+                total_duration += route["duration"]
+
+                # Extract route information from steps
+                for leg in route["legs"]:
+                    for step in leg["steps"]:
+                        if "name" in step and step["name"]:
+                            street_name = step["name"]
+                            if street_name != "unnamed road":
+                                route_info.append(street_name)
+
+            except requests.exceptions.RequestException as e:
+                raise Exception(f"Error calling OSRM API: {str(e)}")
+            except Exception as e:
+                raise Exception(f"Error processing OSRM response: {str(e)}")
+
+        return {
+            "path": complete_path,
+            "distance": total_distance,  # Total distance in kilometers
+            "duration": total_duration,  # Duration in seconds
+            "route_info": route_info,  # List of street names
+            "waypoints": snapped_coordinates,  # Include the snapped waypoints
+        }
