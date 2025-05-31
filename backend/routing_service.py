@@ -76,7 +76,15 @@ class RoutingService:
         # Step 2: Use OSRM to get the actual route for each segment
         try:
             coordinates = [self.node_coordinates[node] for node in path]
-            route_info = self.osrm.get_route(coordinates)
+
+            # Get coordinates of nodes to avoid for OSRM
+            avoid_coordinates = []
+            if avoid:
+                for avoid_node in avoid:
+                    if avoid_node in self.node_coordinates:
+                        avoid_coordinates.append(self.node_coordinates[avoid_node])
+
+            route_info = self.osrm.get_route(coordinates, avoid_coordinates)
             return {
                 "path": route_info["path"],
                 "distance": route_info["distance"],

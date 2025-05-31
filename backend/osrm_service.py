@@ -47,7 +47,9 @@ class OSRMService:
             return lat, lon  # Fallback to original coordinates
 
     def get_route(
-        self, coordinates: List[Tuple[float, float]], avoid_nodes: List[str] = None
+        self,
+        coordinates: List[Tuple[float, float]],
+        avoid_coordinates: List[Tuple[float, float]] = None,
     ) -> Dict:
         """
         Get a route between coordinates using OSRM, ensuring the route follows the graph nodes
@@ -55,7 +57,7 @@ class OSRMService:
 
         Args:
             coordinates: List of (latitude, longitude) tuples representing graph nodes
-            avoid_nodes: List of node names to avoid (not used in this implementation)
+            avoid_coordinates: List of (latitude, longitude) tuples to avoid (for future use)
 
         Returns:
             Dict containing:
@@ -66,6 +68,9 @@ class OSRMService:
         """
         if not coordinates or len(coordinates) < 2:
             raise ValueError("At least two coordinates are required")
+
+        if avoid_coordinates is None:
+            avoid_coordinates = []
 
         # Snap each coordinate to the nearest road
         snapped_coordinates = [
@@ -96,6 +101,9 @@ class OSRMService:
                 "steps": "true",  # Get detailed steps to ensure we follow the waypoints
                 "annotations": "true",  # Get additional annotations including street names
             }
+
+            # Note: The public OSRM server doesn't support exclude parameters
+            # The avoid functionality is handled at the Dijkstra level for node avoidance
 
             try:
                 response = requests.get(url, params=params)

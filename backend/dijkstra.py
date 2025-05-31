@@ -111,34 +111,56 @@ class DijkstraAlgorithm:
     ) -> Tuple[List[str], float]:
         """
         Find a path from start to end, passing through all waypoints in order.
+        This method prevents backtracking by checking for common nodes between segments.
         """
-        path = []  # o variabila pentru drum
-        total_distance = 0  # o variabila pentru distanta totala
-        current = start  # incepem cu punctul de start
-        for wp in waypoints + [
-            end
-        ]:  # mergem printr-o lista care contine toate waypoint-urile plus punctul de final
-            # gasim cel mai scurt drum de la punctul curent la waypoint-ul urmator
-            subpath, dist = self.find_shortest_path(current, wp, avoid=avoid)
+        if not waypoints:
+            return self.find_shortest_path(start, end, avoid=avoid)
 
-            # daca nu am gasit niciun drum, returnam o lista goala si distanta infinita
+        # Create the full sequence of nodes to visit
+        full_sequence = [start] + waypoints + [end]
+        complete_path = []
+        total_distance = 0
+
+        # Calculate path between each consecutive pair
+        for i in range(len(full_sequence) - 1):
+            current_start = full_sequence[i]
+            current_end = full_sequence[i + 1]
+
+            # Find path between current pair
+            subpath, dist = self.find_shortest_path(
+                current_start, current_end, avoid=avoid
+            )
+
             if not subpath:
                 return [], float("inf")
 
-            # daca avem deja un drum (nu e primul waypoint)
-            if path:
-                # adaugam subdrumul la drumul existent, dar sarim peste primul nod
-                # pentru a evita duplicarea nodurilor (nodul curent apare deja in path)
-                path += subpath[1:]
+            # For the first segment, add the entire path
+            if i == 0:
+                complete_path = subpath[:]
             else:
-                # daca e primul waypoint, adaugam tot subdrumul
-                path += subpath
+                # For subsequent segments, check for overlap with the current path
+                # Find where the new subpath should connect
+                if subpath[0] == complete_path[-1]:
+                    # Perfect connection - just add the rest
+                    complete_path.extend(subpath[1:])
+                else:
+                    # Check if any node in the new subpath already exists in our complete path
+                    # We'll connect at the last occurrence to avoid backtracking
+                    connection_point = -1
+                    for j in range(len(complete_path) - 1, -1, -1):
+                        if complete_path[j] in subpath:
+                            connection_point = j
+                            subpath_start = subpath.index(complete_path[j])
+                            break
 
-            # adaugam distanta gasita la distanta totala
+                    if connection_point >= 0:
+                        # Trim the complete path to the connection point and add the new segment
+                        complete_path = complete_path[: connection_point + 1]
+                        complete_path.extend(subpath[subpath_start + 1 :])
+                    else:
+                        # No connection found, just append (shouldn't happen in a connected graph)
+                        complete_path.extend(subpath[1:])
+
             total_distance += dist
 
-            # actualizam punctul curent pentru urmatoarea iteratie
-            current = wp
-
-        # returnam drumul complet si distanta totala
-        return path, total_distance
+        return complete_path, total_distance

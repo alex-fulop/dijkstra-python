@@ -52,13 +52,18 @@ logger = logging.getLogger(__name__)
 
 
 def initialize_routing_service(db: Session):
-    """Initialize the routing service with all existing nodes and edges from the database"""
+    """Initialize the routing service and Dijkstra graph with all existing nodes and edges from the database"""
     try:
         # Get all nodes
         nodes = db.query(Node).all()
         for node in nodes:
+            # Add to routing service
             routing_service.add_node(node.name, node.latitude, node.longitude)
             print(f"Added node to routing service: {node.name}")
+
+            # Add to Dijkstra graph
+            dijkstra.graph[node.name] = []
+            print(f"Added node to Dijkstra graph: {node.name}")
 
         # Get all edges
         edges = db.query(Edge).all()
@@ -66,11 +71,24 @@ def initialize_routing_service(db: Session):
             source = db.query(Node).filter(Node.id == edge.source_id).first()
             target = db.query(Node).filter(Node.id == edge.target_id).first()
             if source and target:
+                # Add to routing service
                 routing_service.add_edge(source.name, target.name)
                 print(f"Added edge to routing service: {source.name} -> {target.name}")
 
+                # Add to Dijkstra graph
+                dijkstra.add_edge(source.name, target.name, edge.weight)
+                print(
+                    f"Added edge to Dijkstra graph: {source.name} -> {target.name} (weight: {edge.weight})"
+                )
+
+        print(
+            f"Initialization complete: {len(nodes)} nodes and {len(edges)} edges loaded"
+        )
+        print(f"Dijkstra graph nodes: {list(dijkstra.graph.keys())}")
+
     except Exception as e:
         print(f"Error initializing routing service: {str(e)}")
+        traceback.print_exc()
 
 
 @app.on_event("startup")
@@ -270,6 +288,17 @@ async def import_json(data: Dict, db: Session = Depends(get_db)):
                     db_node = Node(name=name, latitude=coords[0], longitude=coords[1])
                     db.add(db_node)
                     print(f"Added node: {name} with coordinates {coords}")
+
+                    # Also add to routing service
+                    routing_service.add_node(name, coords[0], coords[1])
+                    print(f"Added node to routing service: {name}")
+                else:
+                    # If node exists in DB but not in routing service, add it
+                    if name not in routing_service.node_coordinates:
+                        routing_service.add_node(
+                            name, existing_node.latitude, existing_node.longitude
+                        )
+                        print(f"Added existing node to routing service: {name}")
             except Exception as node_error:
                 print(f"Error adding node {name}: {str(node_error)}")
                 raise
@@ -706,8 +735,15 @@ async def update_k_value(k_update: KValueUpdate, db: Session = Depends(get_db)):
             dijkstra.graph[node.name] = []
         print("In-memory graph cleared")
 
-        # Rebuild graph with new K value
+        # Ensure routing service has all nodes before rebuilding edges
+        print("Ensuring routing service has all nodes...")
         all_nodes = db.query(Node).all()
+        for node in all_nodes:
+            if node.name not in routing_service.node_coordinates:
+                routing_service.add_node(node.name, node.latitude, node.longitude)
+                print(f"Added missing node to routing service: {node.name}")
+
+        # Rebuild graph with new K value
         print(f"\nRebuilding graph with {len(all_nodes)} nodes")
         total_edges = 0
 
